@@ -17,7 +17,6 @@ demo.py --live and narrates it.
 """
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -67,9 +66,8 @@ class MegastructureResult:
     n_candidates: int
     n_sandboxes: int                  # distinct MODAL_TASK_IDs (the megastructure size)
     sandbox_ids: list[str]
-    fanout_wall_s: float              # wall time of the concurrent fan-out
-    serial_estimate_s: float          # sum of per-candidate seconds (what sequential would cost)
-    parallelism: float                # serial_estimate / fanout_wall (the scale-out factor)
+    fanout_wall_s: float              # wall time of the concurrent fan-out (whole swarm)
+    parallelism: int                  # distinct live T4 containers used at once (megastructure width)
     committed: list[str]              # committed ledger_ids
     blocked: list[str]                # blocked labels
     compounding: Optional[dict] = None  # {baseline_ledger_id, parent_ledger_id, promoted, run_id}
@@ -132,26 +130,15 @@ def _blocked_dict(label: str, static: dict) -> dict:
     }
 
 
-async def _fan_out_async(payloads: list[dict]) -> list[tuple[dict, float]]:
+def fan_out(members: list[tuple[str, str]], spec: Optional[dict] = None) -> tuple[dict[str, dict], dict]:
+    """Static-pre-gate, then CONCURRENTLY verify the survivors on Modal via .map() (proven in
+    phase-zero to scale out across distinct containers). Returns
+    ({candidate_id: live_verdict_dict}, telemetry). Disguise/bypass cheats are pre-gated
+    client-side and never spin a sandbox (they die before GPU spend)."""
     import modal
 
-    fn = modal.Function.from_name(APP_NAME, FUNCTION_NAME)
-
-    async def one(p: dict) -> tuple[dict, float]:
-        t0 = time.monotonic()
-        v = await fn.remote.aio(p)
-        return v, round(time.monotonic() - t0, 2)
-
-    return await asyncio.gather(*[one(p) for p in payloads])
-
-
-def fan_out(members: list[tuple[str, str]], spec: Optional[dict] = None) -> tuple[dict[str, dict], dict]:
-    """Static-pre-gate, then concurrently verify the survivors on Modal. Returns
-    ({candidate_id: live_verdict_dict}, telemetry). Disguise cheats never spin a sandbox."""
     verdicts: dict[str, dict] = {}
-    per_seconds: dict[str, float] = {}
     modal_batch: list[tuple[str, str]] = []
-
     for label, _expect in members:
         src = candidate_source(label)
         st = static_checker.static_pregate(src, backend="triton")
@@ -161,16 +148,16 @@ def fan_out(members: list[tuple[str, str]], spec: Optional[dict] = None) -> tupl
             modal_batch.append((label, src))
 
     payloads = [_payload(label, src, spec) for label, src in modal_batch]
-    t0 = time.monotonic()
-    results = asyncio.run(_fan_out_async(payloads)) if payloads else []
-    fanout_wall = round(time.monotonic() - t0, 2)
+    fanout_wall = 0.0
+    if payloads:
+        fn = modal.Function.from_name(APP_NAME, FUNCTION_NAME)
+        t0 = time.monotonic()
+        results = list(fn.map(payloads))          # concurrent fan-out across containers
+        fanout_wall = round(time.monotonic() - t0, 2)
+        for (label, _src), vdict in zip(modal_batch, results):
+            verdicts[_cid(label)] = vdict
 
-    for (label, _src), (vdict, secs) in zip(modal_batch, results):
-        verdicts[_cid(label)] = vdict
-        per_seconds[_cid(label)] = secs
-
-    telemetry = {"fanout_wall_s": fanout_wall, "per_seconds": per_seconds}
-    return verdicts, telemetry
+    return verdicts, {"fanout_wall_s": fanout_wall, "n_modal": len(payloads)}
 
 
 def run_megastructure(
@@ -233,14 +220,12 @@ def run_megastructure(
             speedup=(o.verdict.speedup if o else vd.get("speedup")),
             blocked_reason=(o.blocked_reason if o else vd.get("blocked_reason")),
             modal_task_id=tid,
-            sandbox_seconds=tele["per_seconds"].get(cid),
+            sandbox_seconds=None,
             ledger_id=(o.ledger_id if o else None),
             proof_hash=(o.proof_hash if o else None),
         ))
 
     distinct = sorted(set(sandbox_ids))
-    serial_est = round(sum(tele["per_seconds"].values()), 2)
-    parallelism = round(serial_est / tele["fanout_wall_s"], 2) if tele["fanout_wall_s"] > 0 else 0.0
 
     result = MegastructureResult(
         members=members_out,
@@ -248,8 +233,7 @@ def run_megastructure(
         n_sandboxes=len(distinct),
         sandbox_ids=distinct,
         fanout_wall_s=tele["fanout_wall_s"],
-        serial_estimate_s=serial_est,
-        parallelism=parallelism,
+        parallelism=len(distinct),
         committed=[m.ledger_id for m in members_out if m.promoted and m.ledger_id],
         blocked=[m.label for m in members_out if not m.promoted],
         trace_id=orch.trace_id,
@@ -291,7 +275,7 @@ def label_exists(label: str) -> bool:
 if __name__ == "__main__":
     r = run_megastructure()
     print(f"\nMEGASTRUCTURE: {r.n_candidates} candidates -> {r.n_sandboxes} live Modal T4 sandboxes "
-          f"in {r.fanout_wall_s}s (serial would be ~{r.serial_estimate_s}s -> {r.parallelism}x scale-out)")
+          f"(concurrent), whole swarm verified in {r.fanout_wall_s}s")
     for m in r.members:
         print(f"  {m.label:<20} {m.verdict:<10} promoted={m.promoted!s:<5} speedup={m.speedup} "
               f"task={m.modal_task_id} :: {m.blocked_reason or 'committed'}")

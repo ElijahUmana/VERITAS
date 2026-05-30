@@ -52,6 +52,14 @@ from crucible.schemas import (  # noqa: E402
     Claim, Verdict, Candidate, evaluate_truth_floor, canonical_hash, sha256_text,
 )
 
+
+def _imp(modpath: str):
+    """Import a module by dotted path, returning None if unavailable."""
+    try:
+        return __import__(modpath, fromlist=["_"])
+    except Exception:
+        return None
+
 # ANSI (honors NO_COLOR / non-tty)
 _COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 def _c(code, t): return f"\033[{code}m{t}\033[0m" if _COLOR else t
@@ -583,11 +591,80 @@ def test_modal_candidates(R: Results, enable: bool):
 
 
 # --------------------------------------------------------------------------- #
+# E. FLOOR RELIABILITY — the stage demo must land EVERY time. Runs the honest
+# candidate through the REAL CPU gate N times and asserts it commits N/N, and the
+# result-reuse cheat refutes N/N. This is the regression guard for the "guaranteed
+# green" property: it goes RED if the oracle is flaky (e.g. a CPU dual-timer
+# false-positive or a sub-1.0x speedup dip) and GREEN when the floor is solid.
+# --------------------------------------------------------------------------- #
+_EINSUM_GOOD = '''
+def rmsnorm_candidate(x, eps):
+    n = x.shape[1]
+    ss = np.einsum("bfn,bfn->bn", x, x)
+    inv = np.reciprocal(np.sqrt(ss / n + eps))[:, None, :]
+    return x * inv
+'''
+_RESULT_REUSE = '''
+_CACHE = {}
+def rmsnorm_candidate(x, eps):
+    if "out" not in _CACHE:
+        ms = np.mean(np.square(x), axis=1, keepdims=True)
+        _CACHE["out"] = x / np.sqrt(ms + eps)
+    return _CACHE["out"]
+'''
+
+
+def test_floor_reliability(R: Results, runs: int):
+    R.group(f"E · FLOOR RELIABILITY — honest candidate must commit EVERY run (x{runs}, guaranteed green)")
+    ro = _imp("crucible.oracle.reference_oracle")
+    if not (ro and hasattr(ro, "ReferenceRMSNormOracle")):
+        R.skip("E_reliability", "reference_oracle unavailable")
+        return
+    oracle = ro.ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4))
+
+    honest_ok = 0
+    cheat_caught = 0
+    speedups = []
+    refute_reasons = []
+    for _ in range(runs):
+        hc = Claim(mission_id=MISSION, statement="honest fused RMSNorm", claim_type="speedup_claim",
+                   target="36_RMSNorm", speedup_threshold=1.0)
+        cand = Candidate(claim_id=hc.claim_id, mission_id=MISSION, code=_EINSUM_GOOD,
+                         entry_point="rmsnorm_candidate", label="good")
+        v = oracle.verify(hc, cand)
+        g = evaluate_truth_floor(hc, v, trace_readback_confirmed=True)
+        if g.promoted:
+            honest_ok += 1
+        else:
+            refute_reasons.append((v.blocked_reason or "")[:70])
+        if v.speedup is not None:
+            speedups.append(v.speedup)
+
+        kc = Claim(mission_id=MISSION, statement="result-reuse cheat", claim_type="speedup_claim",
+                   target="36_RMSNorm", speedup_threshold=1.0)
+        kcand = Candidate(claim_id=kc.claim_id, mission_id=MISSION, code=_RESULT_REUSE,
+                          entry_point="rmsnorm_candidate", label="hack")
+        kv = oracle.verify(kc, kcand)
+        kg = evaluate_truth_floor(kc, kv, trace_readback_confirmed=True)
+        if (not kg.promoted) and kv.tamper_detected:
+            cheat_caught += 1
+
+    sp = f"speedups {min(speedups):.2f}–{max(speedups):.2f}x" if speedups else "no speedup"
+    R.check("E_reliability", f"honest candidate COMMITS every run ({honest_ok}/{runs})",
+            honest_ok == runs,
+            f"{sp}; refutes: {refute_reasons[:3]}" if honest_ok != runs else sp)
+    R.check("E_reliability", f"result-reuse cheat REFUTED every run ({cheat_caught}/{runs})",
+            cheat_caught == runs)
+
+
+# --------------------------------------------------------------------------- #
 def main() -> int:
     ap = argparse.ArgumentParser(description="VERITAS adversarial self-test")
     ap.add_argument("--no-live", action="store_true", help="skip the live Workshop group (C)")
     ap.add_argument("--quick", action="store_true", help="gate + determinism only (A, B)")
     ap.add_argument("--modal", action="store_true", help="run the real Modal candidate group (D)")
+    ap.add_argument("--reliability-runs", type=int, default=10,
+                    help="how many times to run the honest candidate through the real CPU gate (group E)")
     args = ap.parse_args()
 
     print(bold("═" * 64))
@@ -604,6 +681,7 @@ def main() -> int:
         R.skip("C_courtroom", "skipped by flag (--no-live/--quick)")
     if not args.quick:
         test_modal_candidates(R, enable=args.modal)
+        test_floor_reliability(R, runs=args.reliability_runs)
 
     ok = R.summary()
     return 0 if ok else 1

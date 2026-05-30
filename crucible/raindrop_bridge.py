@@ -166,7 +166,10 @@ def crucible_workflow(
     for k, v in (crucible_meta or {}).items():
         if v is None:
             continue
-        meta[k if k.startswith("crucible.") else f"crucible.{k}"] = v
+        key = k if k.startswith("crucible.") else f"crucible.{k}"
+        # Agents-SDK trace metadata values MUST be strings — coerce so any caller
+        # (e.g. swarm passing an int swarm_index) is safe.
+        meta[key] = v if isinstance(v, str) else str(v)
     with trace(workflow_name=name, metadata=meta or None, trace_id=trace_id, group_id=group_id) as t:
         yield t
 

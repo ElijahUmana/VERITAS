@@ -109,7 +109,18 @@ class GenerationResult:
 # --------------------------------------------------------------------------- #
 # 1. Propose (live gpt-5.4-mini, structured output, traced via the bridge)
 # --------------------------------------------------------------------------- #
-async def propose_candidate(claim: Claim, *, model: str = DEFAULT_MODEL) -> tuple[Candidate, CandidateProposal]:
+async def propose_candidate(
+    claim: Claim,
+    *,
+    model: str = DEFAULT_MODEL,
+    extra_directive: str = "",
+    label: str = "generated",
+    meta_extra: Optional[dict] = None,
+) -> tuple[Candidate, CandidateProposal]:
+    """Propose ONE candidate via gpt-5.4-mini structured output.
+
+    ``extra_directive`` diversifies the approach (used by the swarm to fan out
+    DISTINCT candidates so the verified-survivor rate is meaningful)."""
     from agents import Agent, Runner
 
     from crucible.raindrop_bridge import crucible_workflow
@@ -125,12 +136,12 @@ async def propose_candidate(claim: Claim, *, model: str = DEFAULT_MODEL) -> tupl
         f"Target benchmark: {claim.target}. "
         f"Required speedup threshold: {claim.effective_threshold}x (be honest)."
     )
-    with crucible_workflow(
-        "kernel_generator",
-        node="candidate",
-        crucible_meta={"claim_id": claim.claim_id, "mission_id": claim.mission_id,
-                       "model": model},
-    ):
+    if extra_directive:
+        prompt += f"\n\nApproach directive (make THIS candidate distinct): {extra_directive}"
+    meta = {"claim_id": claim.claim_id, "mission_id": claim.mission_id, "model": model}
+    if meta_extra:
+        meta.update(meta_extra)
+    with crucible_workflow("kernel_generator", node="candidate", crucible_meta=meta):
         result = await Runner.run(agent, prompt)
 
     proposal: CandidateProposal = result.final_output
@@ -141,10 +152,11 @@ async def propose_candidate(claim: Claim, *, model: str = DEFAULT_MODEL) -> tupl
         entry_point=proposal.entry_point or "ModelNew",
         generator=model,
         strategy=proposal.strategy,
-        label="generated",
+        label=label,
         metadata={
             "rationale": proposal.rationale,
             "claimed_speedup": proposal.claimed_speedup,
+            "approach_directive": extra_directive or None,
         },
     )
     return candidate, proposal

@@ -217,6 +217,15 @@ def verify_candidate(payload: dict) -> dict:
             "modal_task_id": _os.environ.get("MODAL_TASK_ID"),
             "node": _platform.node(),
         }
+
+        # CONTAINER-REUSE ISOLATION: Modal reuses warm containers across .map()/sequential calls,
+        # so a prior co-tenant candidate could leave CUDA state behind (cached/poisoned allocator
+        # blocks, peak stats). Reset to a clean slate so THIS verdict is independent of co-tenancy
+        # — a verdict must never depend on who ran before it on the same GPU.
+        torch.cuda.synchronize(device)
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+        torch.cuda.synchronize(device)
         dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[precision]
 
         candidate_src = payload["candidate_src"]

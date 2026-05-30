@@ -1,0 +1,30 @@
+{
+  "certificate_id": "crt_097a41337b8d",
+  "claim_id": "clm_a6836f7ba0cd",
+  "candidate_id": "cnd_9e6474dcb180",
+  "mission_id": "swarm_4c4833319cd6",
+  "claim": "A Triton RMSNorm kernel (reduce over dim=1) faster than the PyTorch reference.",
+  "claim_type": "speedup_claim",
+  "artifact_hash": "63cdc28f4c9c5b508f9769df83f4fb3e8907d8f34d2d9e412fee6e35323c8d24",
+  "assumptions": {
+    "shape": null,
+    "dtype": null,
+    "hardware": "Modal Tesla T4",
+    "tolerance": null,
+    "seeds": [],
+    "extra": {}
+  },
+  "oracle_protocol": {
+    "correctness": "reference forward vs candidate over 5 trials (seeds from 42) + hidden extra shape/seed; torch.allclose at fp32 atol=rtol=1e-2; candidate runs on cloned inputs, reference recomputed from the pristine copy; shape/dtype/isnan/isinf asserted.",
+    "speed": "cuda.synchronize -> 5 warmup -> 100 timed trials with L2 clears between trials; speedup = reference_time / candidate_time on the same harness.",
+    "anti_tamper": "dual timer (cuda_event vs do_bench) rejects >1.5x disagreement (stream bypass); >10x speedup rejected (timing fraud); static pre-gate blocks torch-in-disguise / try-except / bare-pass before any GPU spend."
+  },
+  "verdict": "confirmed",
+  "speedup": 1.7677828048782211,
+  "trace_id": "e6f26b106a036a7448d680a5b7cad721",
+  "run_id": 1,
+  "ledger_id": "ldg_0b1a5a53d7b6",
+  "proof_hash": "14e21c6f92688562d0363c98c1bbe1027c1f97a68da0b877916947a5841837fa",
+  "statement_of_bounds": "Verified under the stated bounds and accepted under this oracle. This is not a claim of universal correctness.",
+  "created_at": "2026-05-30T23:35:11.326+00:00"
+}
