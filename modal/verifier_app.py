@@ -209,6 +209,14 @@ def verify_candidate(payload: dict) -> dict:
             raise RuntimeError("CUDA not available in the Modal worker (harness/infra error)")
         device = torch.device("cuda", torch.cuda.current_device())
         verdict["hardware"] = torch.cuda.get_device_name(device)
+        # Sandbox identity — lets a fan-out prove N candidates ran on M distinct Modal containers
+        # (the megastructure made real). Modal sets MODAL_TASK_ID per container.
+        import os as _os
+        import platform as _platform
+        verdict["details"]["sandbox"] = {
+            "modal_task_id": _os.environ.get("MODAL_TASK_ID"),
+            "node": _platform.node(),
+        }
         dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[precision]
 
         candidate_src = payload["candidate_src"]

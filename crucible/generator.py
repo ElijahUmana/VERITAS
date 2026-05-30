@@ -187,7 +187,11 @@ def _run_orchestrator(claim: Claim, candidate: Candidate):
         return None
     try:
         router = OracleRouter(default=KernelOracle()).register("existence_claim", CitationOracleAdapter())
-        ledger = Ledger(os.environ.get("VERITAS_LEDGER_DB", str(REPO_ROOT / "veritas_ledger.db")))
+        # Ledger() with no arg = the canonical persistent path (VERITAS_LEDGER_DB
+        # env, else <repo>/veritas_ledger.db) per crucible.ledger.DEFAULT_LEDGER_PATH.
+        # NOTE: demo.py deliberately uses its OWN fresh file, so standalone generator
+        # runs persist/compound here without polluting the stage demo.
+        ledger = Ledger()
         # Share OUR mission_id so the orchestrator's domain trace stitches to the
         # generator's proposal trace (both carry crucible.mission_id).
         orch = Orchestrator(
