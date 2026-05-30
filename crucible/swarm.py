@@ -224,6 +224,21 @@ async def run_swarm(*, n: int, model: str, propose_concurrency: int,
 
 
 # --------------------------------------------------------------------------- #
+def generate_candidate_sources(
+    n: int = 10, *, model: str = DEFAULT_MODEL,
+    mission_id: Optional[str] = None, concurrency: int = 8,
+) -> list[tuple]:
+    """Integration helper for modal-oracle's ``live_swarm.run_megastructure``.
+
+    Propose N diverse gpt-5.4-mini candidates and return ``[(candidate_id, code, "")]``
+    ready to pass as ``run_megastructure(extra_sources=...)`` (expect="" — the gate
+    decides). MUST be called OUTSIDE an event loop (run_megastructure uses Modal's
+    sync ``fn.map``, which can't iterate from async)."""
+    mid = mission_id or new_id("swarm")
+    items = asyncio.run(propose_swarm(mid, n, model, concurrency))
+    return [(c.candidate_id, c.code, "") for (_c, c) in items]
+
+
 def _print_report(rep: SwarmReport) -> None:
     print("\n  VERITAS — VERIFIED SWARM FAN-OUT (the megastructure at demo scale)\n")
     print(f"  mission_id      : {rep.mission_id}   (the swarm courtroom — query crucible.mission_id)")

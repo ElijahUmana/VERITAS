@@ -620,7 +620,10 @@ def test_floor_reliability(R: Results, runs: int):
     if not (ro and hasattr(ro, "ReferenceRMSNormOracle")):
         R.skip("E_reliability", "reference_oracle unavailable")
         return
-    oracle = ro.ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4))
+    # Mirror the demo's oracle config (timing_trials=60) so this guard faithfully
+    # reflects the stage artifact's reliability.
+    oracle = ro.ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4),
+                                       timing_trials=60)
 
     honest_ok = 0
     cheat_caught = 0
