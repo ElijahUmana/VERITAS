@@ -1,0 +1,24 @@
+{
+  "_cache_meta": {
+    "is_fixture": true,
+    "citation": "999 U.S. 9999",
+    "expected_status": 404,
+    "expected_verdict": "refuted",
+    "expected_color": "RED",
+    "description": "Hard-cached CourtListener v4 citation-lookup response for a FABRICATED case. 999 U.S. 9999 is a syntactically-valid U.S. Reports citation (valid reporter 'U.S.', integer volume/page) whose volume is far beyond any published volume (~600 in 2026), so it does not — and for decades will not — exist. The cold open flashes RED: this case does not exist.",
+    "case_facts_source": "No case. This is the hallucinated-citation pattern that got real lawyers sanctioned (Mata v. Avianca, 2023): a confident AI cite to a case that is not in any reporter. A clearly out-of-range volume guarantees a deterministic 404 (never an accidental 200 against a real different case).",
+    "envelope_note": "Matches the documented v4 citation-lookup schema for a valid-but-not-found citation: status 404, empty clusters. The live overlay (once COURTLISTENER_TOKEN lands) confirms this 404.",
+    "schema_ref": "https://www.courtlistener.com/help/api/rest/v4/citation-lookup/"
+  },
+  "response": [
+    {
+      "citation": "999 U.S. 9999",
+      "normalized_citations": ["999 U.S. 9999"],
+      "start_index": 0,
+      "end_index": 13,
+      "status": 404,
+      "error_message": "Citation not found.",
+      "clusters": []
+    }
+  ]
+}

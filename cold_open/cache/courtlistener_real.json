@@ -1,0 +1,42 @@
+{
+  "_cache_meta": {
+    "is_fixture": true,
+    "citation": "347 U.S. 483",
+    "expected_status": 200,
+    "expected_verdict": "confirmed",
+    "expected_color": "GREEN",
+    "description": "Hard-cached CourtListener v4 citation-lookup response for a REAL, famous SCOTUS case (Brown v. Board of Education). The cold open flashes GREEN: the cited case exists.",
+    "case_facts_source": "Case identity (cluster_id 105221, citations, date_filed 1954-05-17, citation_count 3812, absolute_url) captured live from the PUBLIC CourtListener v4 SEARCH API (no auth required) on 2026-05-30.",
+    "envelope_note": "The citation-lookup v4 envelope (status / normalized_citations / start_index / end_index / error_message) is constructed to match the documented v4 citation-lookup schema. That endpoint now REQUIRES 'Authorization: Token <token>' (401 unauthenticated, as of 2026-05-07); the EDU token is being registered. The citation_oracle live overlay self-refreshes this file with the real captured bytes the first time an authenticated call succeeds.",
+    "schema_ref": "https://www.courtlistener.com/help/api/rest/v4/citation-lookup/"
+  },
+  "response": [
+    {
+      "citation": "347 U.S. 483",
+      "normalized_citations": ["347 U.S. 483"],
+      "start_index": 0,
+      "end_index": 12,
+      "status": 200,
+      "error_message": "",
+      "clusters": [
+        {
+          "id": 105221,
+          "absolute_url": "/opinion/105221/brown-v-board-of-education/",
+          "case_name": "Brown v. Board of Education",
+          "case_name_short": "Brown",
+          "case_name_full": "Brown v. Board of Education of Topeka",
+          "date_filed": "1954-05-17",
+          "precedential_status": "Published",
+          "citation_count": 3812,
+          "court": "Supreme Court of the United States",
+          "court_id": "scotus",
+          "citations": [
+            {"volume": 347, "reporter": "U.S.", "page": "483", "type": 1},
+            {"volume": 74, "reporter": "S. Ct.", "page": "686", "type": 1},
+            {"volume": 98, "reporter": "L. Ed.", "page": "873", "type": 1}
+          ]
+        }
+      ]
+    }
+  ]
+}
