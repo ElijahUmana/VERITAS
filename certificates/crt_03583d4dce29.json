@@ -1,0 +1,37 @@
+{
+  "certificate_id": "crt_03583d4dce29",
+  "claim_id": "C_GOOD",
+  "candidate_id": "cand_good",
+  "mission_id": "veritas-courtroom-live",
+  "claim": "A fused RMSNorm kernel, ~1.6x on the megastructure (BW-bound)",
+  "claim_type": "speedup_claim",
+  "artifact_hash": "701f56f3d04008a54486c2c130b39a6c94edc56fb4de92167cb391dc387fea8e",
+  "assumptions": {
+    "shape": "(256, 1024, 8) + hidden (128, 768, 4)",
+    "dtype": "float64",
+    "hardware": "CPU (numpy reference oracle)",
+    "tolerance": "np.allclose atol=0.01 rtol=0.01",
+    "seeds": [
+      42,
+      43,
+      44,
+      45,
+      46,
+      1337
+    ],
+    "extra": {}
+  },
+  "oracle_protocol": {
+    "correctness": "5 trials (seeds from 42) + hidden shape/seed; np.allclose atol=0.01 rtol=0.01; candidate on cloned inputs, reference from pristine copy; shape/isnan/isinf asserted.",
+    "speed": "3 warmup + 30 timed trials (min, uncontended); speedup = reference_time / candidate_time.",
+    "anti_tamper": "input-mutation + input-sensitivity (result-reuse) + materialization (isnan/isinf) + >10.0x excessive-speedup (wall-vs-cpu dual-timer is GPU-path; off on CPU)."
+  },
+  "verdict": "confirmed",
+  "speedup": 1.4598426522965298,
+  "trace_id": "a0b77d465f2ae5cea4e1444915f29d69",
+  "run_id": 1,
+  "ledger_id": "ldg_e2da5d8dc780",
+  "proof_hash": "b59b0b7b4008d61d3c6746a0541d577d92552a60de58ac92a2951fbc7924a978",
+  "statement_of_bounds": "Verified under the stated bounds and accepted under this oracle. This is not a claim of universal correctness.",
+  "created_at": "2026-05-30T23:45:20.166+00:00"
+}

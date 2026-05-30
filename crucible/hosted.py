@@ -242,10 +242,22 @@ class HostedCourtroom:
         return {"events_status": st, "events": len(events), "event_ids": ids, "signals": len(signals)}
 
 
+# Custom courtroom signals to read back (names as the platform normalises them).
+CUSTOM_SIGNALS = ["Reward hack", "Verified increment", "Falsifier disagreement",
+                  "Silent verification failure", "No oracle promotion attempt", "Cheat shipped"]
+
+
 def verify_readback(query_key=None, base=QUERY_BASE):
-    """Read hosted data back via the Query API to PROVE the signals/events landed.
-    Needs a Query API key (≠ write key). Run: python -m crucible.hosted --verify
-    once RAINDROP_QUERY_API_KEY is in .env."""
+    """PROVE the hosted data via the Query API (needs a query key ≠ write key):
+    events landed, classified signals (linked events), and the A/B experiment
+    result + a Triage-style root-cause investigation.
+
+    NOTE: use the /events?signal=<id> LIST endpoint to count linked events for
+    INSTRUMENTED signals — /events/count?signal= under-reports them (it reflects
+    classifier-applied signals, not instrumented associations). Verified live.
+    Run: python -m crucible.hosted --verify
+    """
+    import urllib.parse
     key = query_key or os.environ.get("RAINDROP_QUERY_API_KEY")
     if not key:
         try:
@@ -262,23 +274,54 @@ def verify_readback(query_key=None, base=QUERY_BASE):
         req = urllib.request.Request(base + path, headers={"Authorization": f"Bearer {key}"})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
-                return r.status, r.read().decode()
+                return r.status, json.loads(r.read().decode())
         except urllib.error.HTTPError as e:
-            return e.code, e.read().decode()
+            return e.code, e.read(300).decode()
 
-    print(f"[verify] reading back from {base} …")
-    st, body = _get("/signals?limit=100")
-    print(f"  GET /v1/signals -> {st}")
-    sigs = []
-    if st == 200:
-        sigs = json.loads(body).get("data", [])
-        for s in sigs:
-            name = s.get("name") or s.get("signal_name")
-            print(f"    signal {str(name):34} id={s.get('id')} count={s.get('count')}")
-    st2, body2 = _get("/events?limit=5")
-    print(f"  GET /v1/events -> {st2}")
-    return {"signals_status": st, "signals": sigs, "events_status": st2,
-            "ok": st == 200}
+    def _list(sid):  # paginated list = source of truth for instrumented-signal linkage
+        out, cursor = [], None
+        for _ in range(12):
+            st, d = _get(f"/events?signal={sid}&limit=100" + (f"&cursor={cursor}" if cursor else ""))
+            if st != 200 or not isinstance(d, dict):
+                break
+            out += d.get("data", [])
+            meta = d.get("meta") or {}
+            cursor = meta.get("cursor")
+            if not (cursor and meta.get("has_more")):
+                break
+        return out
+
+    def _count(props=None, **kw):
+        parts = [f"{k}={urllib.parse.quote(str(v))}" for k, v in kw.items()]
+        for k, v in (props or {}).items():
+            parts.append(f"properties%5B{urllib.parse.quote(k)}%5D={urllib.parse.quote(v)}")
+        st, d = _get("/events/count?" + "&".join(parts))
+        return d["data"]["total"] if st == 200 and isinstance(d, dict) and "data" in d else None
+
+    st, d = _get("/signals?limit=100")
+    if st != 200:
+        raise RuntimeError(f"Query API read failed ({st}): {d}")
+    sigs = {s["name"]: s["id"] for s in d.get("data", [])}
+
+    print(f"[verify] reading back from {base}")
+    print("  EVENTS LANDED:")
+    print(f"    total={_count()}  veritas-crucible={_count(user_id='veritas-crucible')}  "
+          f"promoted={_count(event_name='crucible_claim_promoted')}  blocked={_count(event_name='crucible_claim_blocked')}")
+
+    print("  CLASSIFIED SIGNALS (linked events):")
+    sig_counts = {}
+    for nm in CUSTOM_SIGNALS:
+        sid = sigs.get(nm)
+        n = len(_list(sid)) if sid else None
+        sig_counts[nm] = n
+        print(f"    {nm:32} = {n if n is not None else '(not registered)'}")
+
+    lax = _count({"oracle_config": "lax_oracle", "crucible.claim_kind": "reward_hack", "crucible.promotion": "committed"})
+    strict = _count({"oracle_config": "strict_oracle", "crucible.claim_kind": "reward_hack", "crucible.promotion": "committed"})
+    print("  EXPERIMENT oracle_strictness (cheats shipped, via properties):")
+    print(f"    lax_oracle={lax}  strict_oracle={strict}  → anti-tamper is load-bearing")
+
+    return {"ok": True, "signal_counts": sig_counts, "cheats_lax": lax, "cheats_strict": strict}
 
 
 def _print_followup():

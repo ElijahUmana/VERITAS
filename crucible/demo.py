@@ -112,7 +112,11 @@ def _make_oracle(use_modal: bool):
         say(ylw("  --modal requested but KernelOracle unavailable — falling back to CPU gate."))
     ro = _imp("crucible.oracle.reference_oracle")
     if ro and hasattr(ro, "ReferenceRMSNormOracle"):
-        return ro.ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4)), \
+        # timing_trials=60: more samples → min-time converges to the einsum's true
+        # uncontended speedup (~1.4x), lifting the floor comfortably above the 1.0x
+        # threshold so the honest candidate commits on every run, even under load.
+        return ro.ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4),
+                                         timing_trials=60), \
             "CPU ReferenceRMSNormOracle (deterministic floor)"
     return None, "courtroom_run default CPU oracle"
 

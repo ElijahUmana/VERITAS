@@ -36,6 +36,27 @@ torch + CUDA + a real JIT-compiled Triton kernel all run on T4 — no nvcc / CUD
 ## Cached fallback (FLOOR §1)
 The live verdicts are frozen per-candidate in `cached_verdicts/<id>.json` (+ `index.json`) for the no-Modal demo path. Regenerate with `modal/freeze_cached_verdicts.py`.
 
+## CEILING — live megastructure swarm (`crucible/live_swarm.py`, Tasks #10/#11) — VERIFIED LIVE
+`run_megastructure()` fans N candidates out across **M distinct real Modal T4 sandboxes concurrently**
+(proven by distinct `MODAL_TASK_IDs`), every verdict **gate-produced** through the real Orchestrator,
+then run#2 compounds on run#1's committed row. `modal/run_megastructure.py` (7/7):
+- 4 candidates → **4 distinct live T4 sandboxes**, whole swarm in ~7s (warm) / ~25–47s (cold).
+- `tamper_stream` → **REFUTED, caught live by the dual-timer (≈114×)**; `good_rehearsed` → **CONFIRMED
+  2.41× → COMMITTED**; `wrong_lastdim` + `tamper_result_reuse` → blocked; **run#2 compounds** (parent_ledger_id links).
+- **#11 raw-source swarm:** generated candidates flow in via `run_megastructure(extra_sources=[(cid, source, expect)])`
+  — verified live (a generated source fanned out to a real sandbox → confirmed/committed, 2.42×).
+- **MCP-verified gate-produced** (Workshop run, 12 spans): each candidate carries real `oracle` + `anti_tamper`
+  + `ledger` spans with its verdict (honest: oracle confirmed/2.41× → ledger committed; cheat: oracle refuted,
+  anti_tamper tamper=1 → ledger blocked; `wrong_lastdim` tamper=0 — the courtroom distinguishes "wrong" from "cheating").
+
+### Reliability bug found + fixed (the system catching itself)
+The first fan-out exposed a real bug: under Modal **warm-container reuse**, a prior co-tenant candidate's
+CUDA/allocator state bled into the next candidate's verdict (a cheat got the wrong reason; an honest
+candidate *could* have been falsely rejected). Root-caused and fixed: `verify_candidate` now resets CUDA
+state (`synchronize` + `empty_cache` + `reset_peak_memory_stats`) at the **start of every invocation**, so
+a verdict is independent of who ran before it on the same GPU. Re-verified under reuse — cheat reliably
+caught by its named defense. Verdicts are mechanically real *and* co-tenancy-independent.
+
 ### The legible contrast (honest vs. cheat)
 - **Honest** `good_rehearsed`: `cuda_event` and `do_bench` agree to **1.012×**; genuine **2.42×** win
   (cand 2.37 ms vs ref 5.73 ms, 100 trials, full-sync do_bench). Correct on 5 seeds + 2 hidden tests

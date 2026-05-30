@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 import numpy as np
@@ -64,20 +63,9 @@ class RedundantReductionOracle(ReferenceRMSNormOracle):
             ss = np.einsum("bfn,bfn->bn", x, x)         # full-array reduction (redundant if repeated)
         inv = np.reciprocal(np.sqrt(ss / x.shape[1] + e))
         return x * np.expand_dims(inv, axis=1)
-
-    def _time(self, fn, x: np.ndarray):
-        """Override: use MIN over many trials (the stable true-compute estimate, robust
-        to OS/thermal interference) instead of the base oracle's median-of-30. Verified
-        to give non-overlapping, strictly-monotonic speedups across sequential runs."""
-        for _ in range(self.warmup):
-            fn(x.copy(), self.eps)
-        wall, cpu = [], []
-        for _ in range(self.timing_trials):
-            w0, c0 = time.perf_counter(), time.process_time()
-            fn(x.copy(), self.eps)
-            wall.append(time.perf_counter() - w0)
-            cpu.append(time.process_time() - c0)
-        return min(wall), min(cpu)
+        # NOTE: the base ReferenceRMSNormOracle._time already uses MIN-over-trials
+        # (the stable, drift-resistant estimator) with dual_timer off on CPU — the
+        # heavier warmup/timing_trials set above give the curve its robust ordering.
 
 
 def _candidate_code(passes: int) -> str:
