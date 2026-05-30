@@ -84,6 +84,28 @@ def _strip_docstrings(src: str) -> str:
     return "\n".join(lines)
 
 
+def _has_bare_body_pass(src: str) -> bool:
+    """True only for the REAL inheritance-bypass: a function/class whose body is just `pass`
+    (after a possible docstring). Incidental `pass` (e.g. `if c: pass`) is not flagged."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return True  # unparseable -> be conservative, keep the vendored flag
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = [
+                n for n in node.body
+                if not (isinstance(n, ast.Expr) and isinstance(getattr(n, "value", None), ast.Constant)
+                        and isinstance(n.value.value, str))
+            ]
+            if len(body) == 1 and isinstance(body[0], ast.Pass):
+                return True
+    return False
+
+
+_PASS_MSG = "Contains 'pass' statement (inheritance bypass)"
+
+
 def static_pregate(src: str, backend: str = "triton", precision: str = "fp32") -> dict:
     """Run the static pre-gate.
 
@@ -100,6 +122,12 @@ def static_pregate(src: str, backend: str = "triton", precision: str = "fp32") -
         forbidden=FORBIDDEN,
         warnings=WARNINGS,
     )
+    # AST-precise `pass`: drop the vendored bare-word `pass` error unless a real bare-body pass
+    # exists (avoids false-positives on incidental `pass` in honest code).
+    if _PASS_MSG in errors and not _has_bare_body_pass(src):
+        errors = [e for e in errors if e != _PASS_MSG]
+        valid = len(errors) == 0
+
     return {
         "ok": bool(valid),
         "blocked_reason": (None if valid else "; ".join(errors) or "static check failed"),

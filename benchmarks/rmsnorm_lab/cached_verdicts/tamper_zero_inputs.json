@@ -1,0 +1,89 @@
+{
+  "verdict": "refuted",
+  "claim_id": "proof",
+  "candidate_id": "tamper_zero_inputs",
+  "oracle_type": "kernel",
+  "correctness_passed": false,
+  "speedup": null,
+  "tamper_detected": true,
+  "verifier_status": "OK",
+  "blocked_reason": "input mutation: candidate altered inputs; reference recomputed from pristine copy -> mismatch",
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "correctness": {
+      "seed_0": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.334749698638916,
+        "reason": "allclose failed: max_abs_err=2.33475 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "seed_1": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.3240387439727783,
+        "reason": "allclose failed: max_abs_err=2.32404 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "seed_2": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.28432297706604,
+        "reason": "allclose failed: max_abs_err=2.28432 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "seed_3": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.365719795227051,
+        "reason": "allclose failed: max_abs_err=2.36572 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "seed_4": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.3299670219421387,
+        "reason": "allclose failed: max_abs_err=2.32997 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "hidden_extra_shape": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.2950332164764404,
+        "reason": "allclose failed: max_abs_err=2.29503 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      },
+      "hidden_rand_mix": {
+        "passed": false,
+        "materialized": true,
+        "mutated": true,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 7.961730480194092,
+        "reason": "allclose failed: max_abs_err=7.96173 > tol=0.01 (input mutated: input[0] was mutated in place by the candidate)"
+      }
+    }
+  },
+  "error": null
+}

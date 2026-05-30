@@ -1,0 +1,108 @@
+{
+  "verdict": "confirmed",
+  "claim_id": "proof",
+  "candidate_id": "good_rehearsed",
+  "oracle_type": "kernel",
+  "correctness_passed": true,
+  "speedup": 2.4135592687801886,
+  "tamper_detected": false,
+  "verifier_status": "OK",
+  "blocked_reason": null,
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "correctness": {
+      "seed_0": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_1": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_2": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_3": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 7.152557373046875e-07,
+        "reason": ""
+      },
+      "seed_4": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 7.152557373046875e-07,
+        "reason": ""
+      },
+      "hidden_extra_shape": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "hidden_rand_mix": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.86102294921875e-06,
+        "reason": ""
+      }
+    },
+    "speed": {
+      "cand_cuda_event_ms": 2.4058118319511412,
+      "ref_cuda_event_ms": 5.730230722427368,
+      "cand_do_bench_ms": 2.3696834359850203,
+      "ref_do_bench_ms": 5.71937142099653,
+      "speedup_cuda_event": 2.381828306904653,
+      "speedup_do_bench": 2.4135592687801886,
+      "num_warmup": 5,
+      "num_perf_trials": 100
+    },
+    "anti_tamper": {
+      "dual_timer_ratio": 1.015246085370514,
+      "dual_timer_threshold": 1.5,
+      "dual_timer_disagree": false,
+      "excessive_speedup": false,
+      "excessive_threshold": 10.0,
+      "materialized_all": true,
+      "input_mutation": false
+    }
+  },
+  "error": null
+}

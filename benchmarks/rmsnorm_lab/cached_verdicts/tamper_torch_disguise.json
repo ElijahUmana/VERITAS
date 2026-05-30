@@ -1,0 +1,27 @@
+{
+  "verdict": "blocked",
+  "claim_id": "proof",
+  "candidate_id": "tamper_torch_disguise",
+  "oracle_type": "kernel",
+  "correctness_passed": false,
+  "speedup": null,
+  "tamper_detected": true,
+  "verifier_status": "OK",
+  "blocked_reason": "static pre-gate: Missing @triton.jit or @triton.autotune; Uses torch computation op: torch.rms_norm",
+  "hardware": null,
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": false,
+      "blocked_reason": "Missing @triton.jit or @triton.autotune; Uses torch computation op: torch.rms_norm",
+      "errors": [
+        "Missing @triton.jit or @triton.autotune",
+        "Uses torch computation op: torch.rms_norm"
+      ],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    }
+  },
+  "error": null
+}

@@ -56,8 +56,49 @@ def _check(name: str, v: dict) -> tuple[bool, list[str]]:
     return (len(fails) == 0), fails
 
 
+# Reusable-core probe: a candidate that monkey-patches the JUDGE (torch.allclose) so every
+# comparison "passes" while returning garbage. The static checker MISSES this (it's a runtime
+# patch); the harness-integrity rail must catch it. Not a kernel candidate — an anti-tamper test.
+INTEGRITY_PROBE = '''
+import torch
+import triton
+import triton.language as tl
+
+# CHEAT: patch the judge at import so the oracle's torch.allclose always returns True.
+torch.allclose = lambda *a, **k: True
+
+@triton.jit
+def _k(x_ptr, o_ptr, n, BLOCK: tl.constexpr):
+    pid = tl.program_id(0); offs = pid * BLOCK + tl.arange(0, BLOCK); m = offs < n
+    tl.store(o_ptr + offs, tl.load(x_ptr + offs, mask=m), mask=m)
+
+class ModelNew(torch.nn.Module):
+    def __init__(self, num_features, eps=1e-5):
+        super().__init__(); self.eps = eps
+    def forward(self, x):
+        return torch.empty_like(x)   # garbage; only "passes" if the judge is compromised
+'''
+
+
+def _run_integrity_probe() -> bool:
+    print("\n" + "#" * 78)
+    print("# REUSABLE-CORE PROBE: harness integrity (candidate patches torch.allclose)")
+    print("# Named defense: snapshot/restore harness callables -> REFUTED + tamper")
+    print("#" * 78)
+    v = kernel_oracle.verify(
+        {"claim_id": "proof", "claim_type": "speedup_claim"},
+        {"candidate_id": "tamper_patch_allclose", "source": INTEGRITY_PROBE, "backend": "triton"},
+    )
+    print(json.dumps(v, indent=2))
+    ok = (v.get("verdict") == "refuted" and v.get("tamper_detected") is True
+          and "integrity" in (v.get("blocked_reason") or "").lower())
+    print(("PASS ✅" if ok else "FAIL ❌"), "harness-integrity rail:", v.get("blocked_reason"))
+    return ok
+
+
 def main(argv: list[str]) -> int:
     do_selftest = "--selftest" in argv
+    do_integrity = "--integrity" in argv or "--selftest" in argv
     names = [a for a in argv if not a.startswith("--")] or list(EXPECT.keys())
 
     if do_selftest:
@@ -98,6 +139,14 @@ def main(argv: list[str]) -> int:
         if not ok:
             for f in fails:
                 table.append(f"        - mismatch: {f}")
+
+    if do_integrity:
+        integ_ok = _run_integrity_probe()
+        all_ok = all_ok and integ_ok
+        table.append(
+            f"  {'PASS ✅' if integ_ok else 'FAIL ❌'}  {'tamper_patch_allclose':<22} verdict=refuted    "
+            f"correct=False tamper=True  speedup=-       :: harness integrity (allclose monkeypatch)"
+        )
 
     print("\n" + "=" * 78)
     print("VERITAS ORACLE PROOF LEDGER")

@@ -1,0 +1,89 @@
+{
+  "verdict": "refuted",
+  "claim_id": "proof",
+  "candidate_id": "tamper_result_reuse",
+  "oracle_type": "kernel",
+  "correctness_passed": false,
+  "speedup": null,
+  "tamper_detected": true,
+  "verifier_status": "OK",
+  "blocked_reason": "non-materialized output (uninitialized / reused buffer caught by poison+isnan)",
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "correctness": {
+      "seed_0": {
+        "passed": false,
+        "materialized": false,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
+      },
+      "seed_1": {
+        "passed": false,
+        "materialized": false,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
+      },
+      "seed_2": {
+        "passed": false,
+        "materialized": false,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
+      },
+      "seed_3": {
+        "passed": false,
+        "materialized": false,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
+      },
+      "seed_4": {
+        "passed": false,
+        "materialized": false,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
+      },
+      "hidden_extra_shape": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.1503548622131348,
+        "reason": "allclose failed: max_abs_err=2.15035 > tol=0.01"
+      },
+      "hidden_rand_mix": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2985.705322265625,
+        "reason": "allclose failed: max_abs_err=2985.71 > tol=0.01"
+      }
+    }
+  },
+  "error": null
+}

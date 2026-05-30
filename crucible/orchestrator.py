@@ -29,7 +29,11 @@ from pathlib import Path
 from typing import Optional
 
 from crucible.certificate import build_certificate, write_certificate
-from crucible.detectors import adjudicate, annotate_from_report, run_detector
+from crucible.detectors import (
+    adjudicate,
+    judge_and_annotate,
+    trace_readback_confirmed as _detector_readback,
+)
 from crucible.ledger import Ledger
 from crucible.oracle.base import Oracle, make_error_verdict
 from crucible.schemas import (
@@ -62,9 +66,50 @@ class ClaimOutcome:
     certificate_paths: Optional[tuple[Path, Path]] = None
     warnings: list[str] = field(default_factory=list)
 
+    # --- flat accessors (the contract demo-verifier / generator read) ---
     @property
     def promoted(self) -> bool:
         return self.gate.promoted
+
+    @property
+    def claim_id(self) -> str:
+        return self.claim.claim_id
+
+    @property
+    def candidate_id(self) -> str:
+        return self.candidate.candidate_id
+
+    @property
+    def mission_id(self) -> str:
+        return self.claim.mission_id
+
+    @property
+    def trace_id(self) -> str:
+        return self.ledger_row.trace_id
+
+    @property
+    def ledger_id(self) -> str:
+        return self.ledger_row.ledger_id
+
+    @property
+    def proof_hash(self) -> str:
+        return self.ledger_row.proof_hash
+
+    @property
+    def promotion(self) -> str:
+        return self.gate.promotion
+
+    @property
+    def blocked_reason(self) -> Optional[str]:
+        return self.gate.blocked_reason
+
+    @property
+    def certificate_id(self) -> Optional[str]:
+        return self.certificate.certificate_id if self.certificate else None
+
+    @property
+    def speedup(self) -> Optional[float]:
+        return self.verdict.speedup
 
 
 class Orchestrator:
@@ -151,21 +196,20 @@ class Orchestrator:
         last_err: Optional[str] = None
         for _ in range(max(1, retries)):
             try:
-                if self._has_oracle_span(claim_id):
+                # raindrop-courtroom's canonical detector-D helper = single source of truth
+                if _detector_readback(self.tracer.trace_id, claim_id, base=self.tracer.base):
                     return True
-            except Exception as exc:  # transport / query error — record, keep trying
+            except Exception as exc:  # transport / query error — try our own query, keep polling
                 last_err = f"{type(exc).__name__}: {exc}"
+                try:
+                    if self._has_oracle_span(claim_id):
+                        return True
+                except Exception:
+                    pass
             time.sleep(delay)
-        # final cross-check against detector D (claims lacking an oracle span)
-        try:
-            missing = {r.get("claim_id") for r in run_detector("D_no_oracle", self.tracer.trace_id, base=self.tracer.base)}
-            confirmed = self._has_oracle_span(claim_id) and claim_id not in missing
-            if not confirmed and last_err:
-                self.warnings.append(f"trace readback for {claim_id} unconfirmed (last error: {last_err})")
-            return confirmed
-        except Exception as exc:
-            self.warnings.append(f"detector D readback failed for {claim_id}: {type(exc).__name__}: {exc}")
-            return False
+        if last_err:
+            self.warnings.append(f"trace readback for {claim_id} unconfirmed (last error: {last_err})")
+        return False
 
     # --- per-claim courtroom motion --------------------------------------- #
     def _verify_one(self, claim: Claim, candidate: Candidate) -> ClaimOutcome:
@@ -341,18 +385,35 @@ class Orchestrator:
         )
         self.tracer.flush()
 
-        # the courtroom audit (good/issue annotations) — non-gating
+        # the courtroom audit (good/issue annotations) — non-gating. raindrop-courtroom's
+        # judge_and_annotate runs all 4 detectors + writes annotations in one call.
         if self.annotate:
             try:
-                report = adjudicate(self.tracer.trace_id, base=self.tracer.base)
-                annotate_from_report(report, base=self.tracer.base)
+                judge_and_annotate(self.tracer.trace_id, base=self.tracer.base)
             except Exception as exc:
-                self.warnings.append(f"adjudicate/annotate failed (non-gating): {type(exc).__name__}: {exc}")
+                self.warnings.append(f"judge_and_annotate failed (non-gating): {type(exc).__name__}: {exc}")
 
         return outcomes
 
     def run_single(self, claim: Claim, candidate: Candidate, *, mission_name: Optional[str] = None) -> ClaimOutcome:
         return self.run([(claim, candidate)], mission_name=mission_name)[0]
+
+    # canonical single-candidate entry-point (the name generator + demo-verifier pin to).
+    def evaluate(self, claim: Claim, candidate: Candidate, *, mission_name: Optional[str] = None) -> ClaimOutcome:
+        """Run ONE candidate through the full courtroom: assign IDs → oracle → spans →
+        §2.3 truth-floor gate → ledger (commit or block) → certificate → replay-ready.
+
+        Returns a :class:`ClaimOutcome`.  ``.verdict`` is the :class:`Verdict`;
+        ``.promoted`` / ``.promotion`` / ``.ledger_id`` / ``.proof_hash`` / ``.trace_id`` /
+        ``.certificate_id`` / ``.blocked_reason`` are flat accessors."""
+        return self.run_single(claim, candidate, mission_name=mission_name)
+
+    # aliases for callers probing alternate names
+    evaluate_candidate = evaluate
+
+    def verify_candidate(self, claim: Claim, candidate: Candidate, *, mission_name: Optional[str] = None) -> Verdict:
+        """Same full gate, but returns just the :class:`Verdict` (propose→verdict loop)."""
+        return self.evaluate(claim, candidate, mission_name=mission_name).verdict
 
     # --- replay (FLOOR §1 52-60s) ----------------------------------------- #
     def trigger_replay(self, claim_id: str, candidate_id: str) -> dict:
@@ -360,8 +421,11 @@ class Orchestrator:
         server if configured; otherwise runs an in-process re-verification and
         emits a replay span (promotion=replayed, or regressed if the verdict flips)."""
         if self.replay_url:
+            # sourceRunId lets raindrop-courtroom's replay server compute verdict_changed
+            # against the original ledger/oracle verdict.
             body = json.dumps({
-                "claim_id": claim_id, "candidate_id": candidate_id, "trace_id": self.tracer.trace_id,
+                "claim_id": claim_id, "candidate_id": candidate_id,
+                "sourceRunId": self.tracer.trace_id, "trace_id": self.tracer.trace_id,
             }).encode()
             req = urllib.request.Request(
                 f"{self.replay_url}/replay", data=body,

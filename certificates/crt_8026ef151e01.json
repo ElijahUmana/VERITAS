@@ -1,0 +1,37 @@
+{
+  "certificate_id": "crt_8026ef151e01",
+  "claim_id": "clm_3196bdcd6fd0",
+  "candidate_id": "cnd_a52a5a7fdc9e",
+  "mission_id": "msn_5a9ccf05471e",
+  "claim": "faster rmsnorm",
+  "claim_type": "speedup_claim",
+  "artifact_hash": "b2ca9d0068f03d8e510635dd76a9c59131b79ee3aa309684f88e252b220abb7c",
+  "assumptions": {
+    "shape": "(128, 512, 8) + hidden (64, 384, 4)",
+    "dtype": "float64",
+    "hardware": "CPU (numpy reference oracle)",
+    "tolerance": "np.allclose atol=0.01 rtol=0.01",
+    "seeds": [
+      42,
+      43,
+      44,
+      45,
+      46,
+      1337
+    ],
+    "extra": {}
+  },
+  "oracle_protocol": {
+    "correctness": "5 trials (seeds from 42) + hidden shape/seed; np.allclose atol=0.01 rtol=0.01; candidate on cloned inputs, reference from pristine copy; shape/isnan/isinf asserted.",
+    "speed": "3 warmup + 30 timed trials (median); speedup = reference_time / candidate_time.",
+    "anti_tamper": "input-mutation + input-sensitivity (result-reuse) + materialization (isnan/isinf) + >10.0x excessive-speedup + dual-timer >1.5x disagreement (perf_counter vs process_time)."
+  },
+  "verdict": "confirmed",
+  "speedup": 1.4445911981444042,
+  "trace_id": "d8e138f1e5dd916e2694a0b6812d3e5e",
+  "run_id": 1,
+  "ledger_id": "ldg_e3e5933f97c0",
+  "proof_hash": "f9d25e2a53e2bc6a70372c0c9c95f0c2a0d01f19a4f242efe5e06c845bc810fd",
+  "statement_of_bounds": "Verified under the stated bounds and accepted under this oracle. This is not a claim of universal correctness.",
+  "created_at": "2026-05-30T23:08:49.592+00:00"
+}

@@ -1,0 +1,29 @@
+{
+  "verdict": "refuted",
+  "claim_id": "proof",
+  "candidate_id": "tamper_patch_allclose",
+  "oracle_type": "kernel",
+  "correctness_passed": false,
+  "speedup": null,
+  "tamper_detected": true,
+  "verifier_status": "OK",
+  "blocked_reason": "harness integrity: candidate patched ['torch.allclose'] at import",
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "harness_integrity": {
+      "import_patches": [
+        "torch.allclose"
+      ]
+    }
+  },
+  "error": null
+}

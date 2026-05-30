@@ -242,6 +242,45 @@ class HostedCourtroom:
         return {"events_status": st, "events": len(events), "event_ids": ids, "signals": len(signals)}
 
 
+def verify_readback(query_key=None, base=QUERY_BASE):
+    """Read hosted data back via the Query API to PROVE the signals/events landed.
+    Needs a Query API key (≠ write key). Run: python -m crucible.hosted --verify
+    once RAINDROP_QUERY_API_KEY is in .env."""
+    key = query_key or os.environ.get("RAINDROP_QUERY_API_KEY")
+    if not key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(_ROOT, ".env"))
+            key = os.environ.get("RAINDROP_QUERY_API_KEY")
+        except Exception:
+            pass
+    if not key:
+        raise RuntimeError("RAINDROP_QUERY_API_KEY not set — needed to READ hosted data back (≠ write key); "
+                           "create one at auth.raindrop.ai/org/api_keys.")
+
+    def _get(path):
+        req = urllib.request.Request(base + path, headers={"Authorization": f"Bearer {key}"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status, r.read().decode()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode()
+
+    print(f"[verify] reading back from {base} …")
+    st, body = _get("/signals?limit=100")
+    print(f"  GET /v1/signals -> {st}")
+    sigs = []
+    if st == 200:
+        sigs = json.loads(body).get("data", [])
+        for s in sigs:
+            name = s.get("name") or s.get("signal_name")
+            print(f"    signal {str(name):34} id={s.get('id')} count={s.get('count')}")
+    st2, body2 = _get("/events?limit=5")
+    print(f"  GET /v1/events -> {st2}")
+    return {"signals_status": st, "signals": sigs, "events_status": st2,
+            "ok": st == 200}
+
+
 def _print_followup():
     print("\n" + "=" * 72)
     print("HOSTED READ-BACK / EXPERIMENT / TRIAGE — needs the web app or a Query API key")
@@ -259,7 +298,14 @@ def _print_followup():
 
 
 if __name__ == "__main__":
-    run_id = sys.argv[1] if len(sys.argv) > 1 else None
+    if "--verify" in sys.argv[1:]:
+        try:
+            res = verify_readback()
+            sys.exit(0 if res.get("ok") else 2)
+        except RuntimeError as e:
+            print(f"[verify] {e}")
+            sys.exit(1)
+    run_id = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else None
     if not run_id:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".courtroom_run_id")
         if os.path.exists(path):

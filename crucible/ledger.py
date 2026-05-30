@@ -135,6 +135,14 @@ class Ledger:
         rows = self.committed_for_target(target)
         return rows[0] if rows else None
 
+    # aliases for consumers probing alternate names (demo-verifier's run#2 baseline read)
+    def latest_verified(self, target: str) -> Optional[LedgerRow]:
+        """Alias of :meth:`latest_baseline` — run N+1's verified baseline for a target."""
+        return self.latest_baseline(target)
+
+    latest_for_target = latest_verified
+    get_latest_verified = latest_verified
+
     def negative_evidence(self, target: str) -> list[LedgerRow]:
         """Blocked/refuted candidates for a target — the refuted paths run N+1 skips."""
         rows = self.conn.execute(

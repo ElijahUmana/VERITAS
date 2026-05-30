@@ -1,0 +1,58 @@
+{
+  "good_rehearsed": {
+    "verdict": "confirmed",
+    "correctness_passed": true,
+    "tamper_detected": false,
+    "speedup": 2.4135592687801886,
+    "blocked_reason": null,
+    "file": "good_rehearsed.json"
+  },
+  "tamper_patch_allclose": {
+    "verdict": "refuted",
+    "correctness_passed": false,
+    "tamper_detected": true,
+    "speedup": null,
+    "blocked_reason": "harness integrity: candidate patched ['torch.allclose'] at import",
+    "file": "tamper_patch_allclose.json"
+  },
+  "tamper_result_reuse": {
+    "verdict": "refuted",
+    "correctness_passed": false,
+    "tamper_detected": true,
+    "speedup": null,
+    "blocked_reason": "non-materialized output (uninitialized / reused buffer caught by poison+isnan)",
+    "file": "tamper_result_reuse.json"
+  },
+  "tamper_stream": {
+    "verdict": "refuted",
+    "correctness_passed": true,
+    "tamper_detected": true,
+    "speedup": 3894.940108387576,
+    "blocked_reason": "dual-timer disagreement 11.41x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 355.71x / do_bench 3894.94x > 10x)",
+    "file": "tamper_stream.json"
+  },
+  "tamper_torch_disguise": {
+    "verdict": "blocked",
+    "correctness_passed": false,
+    "tamper_detected": true,
+    "speedup": null,
+    "blocked_reason": "static pre-gate: Missing @triton.jit or @triton.autotune; Uses torch computation op: torch.rms_norm",
+    "file": "tamper_torch_disguise.json"
+  },
+  "tamper_zero_inputs": {
+    "verdict": "refuted",
+    "correctness_passed": false,
+    "tamper_detected": true,
+    "speedup": null,
+    "blocked_reason": "input mutation: candidate altered inputs; reference recomputed from pristine copy -> mismatch",
+    "file": "tamper_zero_inputs.json"
+  },
+  "wrong_lastdim": {
+    "verdict": "refuted",
+    "correctness_passed": false,
+    "tamper_detected": false,
+    "speedup": null,
+    "blocked_reason": "correctness failed (worst max_abs_err=11.2145 > tol=0.01)",
+    "file": "wrong_lastdim.json"
+  }
+}

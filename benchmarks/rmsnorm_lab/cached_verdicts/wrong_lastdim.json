@@ -1,0 +1,89 @@
+{
+  "verdict": "refuted",
+  "claim_id": "proof",
+  "candidate_id": "wrong_lastdim",
+  "oracle_type": "kernel",
+  "correctness_passed": false,
+  "speedup": null,
+  "tamper_detected": false,
+  "verifier_status": "OK",
+  "blocked_reason": "correctness failed (worst max_abs_err=11.2145 > tol=0.01)",
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "correctness": {
+      "seed_0": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.6777377128601074,
+        "reason": "allclose failed: max_abs_err=0.677738 > tol=0.01"
+      },
+      "seed_1": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.6439555883407593,
+        "reason": "allclose failed: max_abs_err=0.643956 > tol=0.01"
+      },
+      "seed_2": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.6485370397567749,
+        "reason": "allclose failed: max_abs_err=0.648537 > tol=0.01"
+      },
+      "seed_3": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.7866017818450928,
+        "reason": "allclose failed: max_abs_err=0.786602 > tol=0.01"
+      },
+      "seed_4": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.6653634309768677,
+        "reason": "allclose failed: max_abs_err=0.665363 > tol=0.01"
+      },
+      "hidden_extra_shape": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 0.6573889255523682,
+        "reason": "allclose failed: max_abs_err=0.657389 > tol=0.01"
+      },
+      "hidden_rand_mix": {
+        "passed": false,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 11.214517593383789,
+        "reason": "allclose failed: max_abs_err=11.2145 > tol=0.01"
+      }
+    }
+  },
+  "error": null
+}

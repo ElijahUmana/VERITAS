@@ -1,0 +1,110 @@
+{
+  "verdict": "refuted",
+  "claim_id": "proof",
+  "candidate_id": "tamper_stream",
+  "oracle_type": "kernel",
+  "correctness_passed": true,
+  "speedup": 3894.940108387576,
+  "tamper_detected": true,
+  "verifier_status": "OK",
+  "blocked_reason": "dual-timer disagreement 11.41x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 355.71x / do_bench 3894.94x > 10x)",
+  "hardware": "Tesla T4",
+  "measured_by": "modal-oracle",
+  "details": {
+    "static": {
+      "ok": true,
+      "blocked_reason": null,
+      "errors": [],
+      "warnings": [
+        "Uses CUDA streams (potential timing manipulation)"
+      ],
+      "backend": "triton",
+      "precision": "fp32"
+    },
+    "correctness": {
+      "seed_0": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_1": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_2": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "seed_3": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 7.152557373046875e-07,
+        "reason": ""
+      },
+      "seed_4": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 7.152557373046875e-07,
+        "reason": ""
+      },
+      "hidden_extra_shape": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 5.960464477539062e-07,
+        "reason": ""
+      },
+      "hidden_rand_mix": {
+        "passed": true,
+        "materialized": true,
+        "mutated": false,
+        "patched": [],
+        "candidate_error": false,
+        "max_abs_err": 2.86102294921875e-06,
+        "reason": ""
+      }
+    },
+    "speed": {
+      "cand_cuda_event_ms": 0.016752640152699314,
+      "ref_cuda_event_ms": 5.959132800102234,
+      "cand_do_bench_ms": 0.001468571434088517,
+      "ref_do_bench_ms": 5.719997780663626,
+      "speedup_cuda_event": 355.71305452663546,
+      "speedup_do_bench": 3894.940108387576,
+      "num_warmup": 5,
+      "num_perf_trials": 100
+    },
+    "anti_tamper": {
+      "dual_timer_ratio": 11.407439749838932,
+      "dual_timer_threshold": 1.5,
+      "dual_timer_disagree": true,
+      "excessive_speedup": true,
+      "excessive_threshold": 10.0,
+      "materialized_all": true,
+      "input_mutation": false
+    }
+  },
+  "error": null
+}
