@@ -1,0 +1,22 @@
+# VERITAS courtroom replay — register with `raindrop replay register` from repo root.
+# Workshop replays a captured courtroom run against this real local code: it
+# re-runs a claim's verification subtree and re-emits crucible.* node=replay spans.
+# The agent key MUST equal the event name of the runs being replayed.
+veritas_courtroom_demo:
+  command: .venv/bin/python -m crucible.replay_server
+  # cwd defaults to the repo root that contains .raindrop/agents.yaml.
+
+  # Shape passed to the replay server as request.context (which claim to re-verify).
+  input:
+    claim_id: string
+    candidate_id: string
+
+  # How Workshop prefills that context from the selected trace (editable in the UI).
+  prefillFromTrace:
+    claim_id: properties.claim_id
+    candidate_id: properties.candidate_id
+
+  models:
+    - gpt-5.4-mini
+    - gpt-5.4
+    - claude-sonnet-4-20250514
