@@ -12,3 +12,12 @@ repos/
 research/
 plan/
 *.log
+.venv
+*.db
+# crucible courtroom runtime artifacts (run ids / chosen replay port)
+crucible/.courtroom_run_id
+crucible/.probe_run_id
+crucible/.replay_port
+crucible/.hosted_event_ids
+# demo-generated outputs (regenerated every run: certificates + the demo ledger)
+artifacts/

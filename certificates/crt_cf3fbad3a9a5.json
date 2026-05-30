@@ -1,0 +1,30 @@
+{
+  "certificate_id": "crt_cf3fbad3a9a5",
+  "claim_id": "clm_32aa58cd122f",
+  "candidate_id": "cnd_177861b003e3",
+  "mission_id": "msn_67fcc9f5bd08",
+  "claim": "347 U.S. 483",
+  "claim_type": "existence_claim",
+  "artifact_hash": "",
+  "assumptions": {
+    "shape": null,
+    "dtype": null,
+    "hardware": null,
+    "tolerance": null,
+    "seeds": [],
+    "extra": {}
+  },
+  "oracle_protocol": {
+    "correctness": "reference forward vs candidate over 5 trials (seeds from 42) + hidden extra shape/seed; torch.allclose at fp32 atol=rtol=1e-2; candidate runs on cloned inputs, reference recomputed from the pristine copy; shape/dtype/isnan/isinf asserted.",
+    "speed": "cuda.synchronize -> 5 warmup -> 100 timed trials with L2 clears between trials; speedup = reference_time / candidate_time on the same harness.",
+    "anti_tamper": "dual timer (cuda_event vs do_bench) rejects >1.5x disagreement (stream bypass); >10x speedup rejected (timing fraud); static pre-gate blocks torch-in-disguise / try-except / bare-pass before any GPU spend."
+  },
+  "verdict": "confirmed",
+  "speedup": null,
+  "trace_id": "52b5a18422828d2e999bb8f3a6996503",
+  "run_id": 1,
+  "ledger_id": "ldg_6e88f6a793c9",
+  "proof_hash": "d55c83afa49e620bea47de1fbfb96ae3cd444d1bec6411c11b5b0426a611239d",
+  "statement_of_bounds": "Verified under the stated bounds and accepted under this oracle. This is not a claim of universal correctness.",
+  "created_at": "2026-05-30T23:04:40.052+00:00"
+}
