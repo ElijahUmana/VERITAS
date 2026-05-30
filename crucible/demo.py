@@ -381,6 +381,82 @@ def beat_close(tl: Timeline, ws: WorkshopClient, run_id: str, run2_id: str | Non
 
 
 # --------------------------------------------------------------------------- #
+# --live CEILING path — the live Modal megastructure (concurrent N-T4 fan-out),
+# gate-produced via modal-oracle's run_megastructure. Replaces the CPU centerpiece
+# with the real GPU swarm. NOT the <60s floor (real GPU + cold start).
+# --------------------------------------------------------------------------- #
+def run_live_megastructure(tl: Timeline, ws: WorkshopClient) -> dict:
+    ls = _imp("crucible.live_swarm")
+    if not (ls and hasattr(ls, "run_megastructure")):
+        say(red("  --live requested but crucible.live_swarm.run_megastructure unavailable."))
+        return {"cheat": False, "verified": False, "compounding": False, "close": False}
+
+    res = None
+    with tl.beat("LIVE · MEGASTRUCTURE FAN-OUT — N candidates → N real T4 GPUs at once", 90):
+        narrate("A swarm of candidates spins up real Modal T4 sandboxes concurrently — "
+                "each verified by the external oracle, every verdict through the real gate.")
+        try:
+            res = ls.run_megastructure(compounding=True, out_dir=str(ARTIFACTS / "certificates"))
+        except Exception as exc:
+            say(red(f"  megastructure run failed: {type(exc).__name__}: {exc}"))
+            return {"cheat": False, "verified": False, "compounding": False, "close": False}
+        say(grn(f"  ✓ {res.n_candidates} candidates fanned out across {res.parallelism} distinct "
+                f"live T4 sandboxes in {res.fanout_wall_s:.1f}s"))
+
+    members = {m.label: m for m in res.members}
+    results = {}
+
+    with tl.beat("LIVE · THE CHEAT — a reward-hack caught on real GPU", 10):
+        cheats = [m for m in res.members if not m.promoted and m.tamper_detected]
+        if cheats:
+            m = cheats[0]
+            verdict_red(f"REJECTED {m.label} — {(m.blocked_reason or 'tamper')[:80]} "
+                        f"(real T4 {m.modal_task_id[:8] if m.modal_task_id else '—'})")
+            results["cheat"] = True
+        else:
+            verdict_red("expected a tamper member to be caught on GPU — none found")
+            results["cheat"] = False
+
+    with tl.beat("LIVE · VERIFIED — honest kernel committed at a real GPU speedup", 10):
+        winners = [m for m in res.members if m.promoted and m.speedup]
+        if winners:
+            m = max(winners, key=lambda x: x.speedup or 0)
+            verdict_green(f"CONFIRMED {m.label} — REAL T4 speedup {m.speedup:.2f}x → ledger COMMITTED")
+            say(dim(f"      proof_hash={(m.proof_hash or '')[:16]}…  sandbox={m.modal_task_id}"))
+            results["verified"] = True
+        else:
+            verdict_red("expected a committed honest increment on GPU — none found")
+            results["verified"] = False
+
+    with tl.beat("LIVE · COMPOUNDING — run #2 builds on the verified GPU baseline", 10):
+        comp = res.compounding or {}
+        ok = bool(comp.get("promoted") and comp.get("parent_ledger_id"))
+        (verdict_green if ok else verdict_red)(
+            f"run #2 committed, parent={str(comp.get('parent_ledger_id',''))[:16]}… "
+            f"(compounds on run #1's verified GPU increment)" if ok
+            else "compounding did not link to run #1")
+        results["compounding"] = ok
+
+    with tl.beat("LIVE · RAINDROP CLOSE — the megastructure, inspectable + replayable", 8):
+        if res.run_url:
+            say(bold("  THE COURTROOM (open in Workshop):"))
+            say(cyn(f"    {res.run_url}") + dim(f"   ← {len(res.committed)} committed, "
+                                                f"{len(res.blocked)} blocked, {res.parallelism} live sandboxes"))
+        # The verdicts came from the real Orchestrator gate (FannedOracle → spans);
+        # confirm the run landed spans in Workshop as an independent readback.
+        n_spans = 0
+        if res.trace_id:
+            row = ws.query_one(f"SELECT COUNT(*) AS n FROM spans WHERE run_id={_sql(res.trace_id)}")
+            n_spans = int(row.get("n") or 0) if row else 0
+        (verdict_green if n_spans > 0 else verdict_red)(
+            f"Workshop confirms {n_spans} gate-produced spans for the megastructure run."
+            if n_spans else "megastructure spans not found in Workshop")
+        results["close"] = bool(res.run_url) and n_spans > 0
+        say(bold(cyn("  \"N real GPUs, one courtroom — only the verified increment compounds.\"")))
+    return results
+
+
+# --------------------------------------------------------------------------- #
 def main() -> int:
     ap = argparse.ArgumentParser(description="VERITAS one-command demo")
     ap.add_argument("--modal", action="store_true",
@@ -388,7 +464,7 @@ def main() -> int:
     ap.add_argument("--cached", action="store_true",
                     help="zero-network cold open (cache only) + CPU gate")
     ap.add_argument("--live", action="store_true",
-                    help="prefer live overlays (CourtListener/OpenAI) where credentials exist")
+                    help="CEILING: run the live Modal megastructure (N candidates → N T4 GPUs concurrently, gate-produced; real GPU, ~30-60s)")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
     if args.no_color:
@@ -403,8 +479,8 @@ def main() -> int:
         mode = "auto"
 
     ws = WorkshopClient()
-    # --modal runs real GPU (cold start + per-candidate timing) → relax the budget.
-    tl = Timeline(target_s=180.0 if args.modal else 60.0)
+    # --modal/--live run real GPU (cold start + fan-out) → relax the <60s budget.
+    tl = Timeline(target_s=240.0 if (args.modal or args.live) else 60.0)
     db_path = _reset_demo_db()
     oracle, oracle_label = _make_oracle(use_modal=args.modal)
     gate_real = _imp("crucible.courtroom_run") is not None

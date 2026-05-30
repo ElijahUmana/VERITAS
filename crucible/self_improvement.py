@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -81,13 +82,63 @@ def _candidate_code(passes: int) -> str:
     )
 
 
-# (passes, expect_committed, label) — the climbing frontier + one rejected non-improvement.
+# (passes, expect_committed, label) — the CPU floor's climbing frontier + one rejected
+# non-improvement. Each pass-count maps to a numpy candidate via _candidate_code.
 LADDER = [
     (6, True, "run1_cse_partial"),     # eliminate 2 redundant passes
     (3, True, "run2_cse_more"),        # eliminate to 3
     (1, True, "run3_cse_full"),        # single optimal reduction
     (2, False, "run4_regression"),     # 2 passes: slower than run3's 1 — must be BLOCKED
 ]
+
+
+@dataclass
+class Rung:
+    """One step of a self-improvement ladder: a real candidate the curve tries against
+    the verified frontier. ``expect_committed`` is the acceptance expectation — a
+    deliberately non-improving rung sets it False to demonstrate the gate blocks it.
+
+    This is the generalized, oracle-agnostic ladder element: the CPU floor builds rungs
+    from numpy pass-count candidates; the GPU ``--live`` curve builds them from real
+    generated Triton survivors (openai-generator's swarm)."""
+    code: str
+    label: str
+    statement: str
+    expect_committed: bool = True
+    entry_point: str = "rmsnorm_candidate"
+    generator: str = "self-improvement-loop"
+
+
+def _default_cpu_rungs() -> list[Rung]:
+    """The deterministic CPU floor ladder (common-subexpression elimination)."""
+    return [
+        Rung(code=_candidate_code(p), label=label, expect_committed=ec,
+             statement=f"RMSNorm kernel: eliminate redundant reductions ({p} pass(es))",
+             entry_point="rmsnorm_candidate")
+        for (p, ec, label) in LADDER
+    ]
+
+
+def rungs_from_survivor_ladder(survivor_ladder, *, entry_point: str = "ModelNew") -> list[Rung]:
+    """Build curve rungs from openai-generator's ``swarm.survivor_ladder(report)`` —
+    ``[(candidate_id, code, speedup)]``, strictly increasing. Each survivor is a
+    committed rung; the curve RE-VERIFIES it on the real oracle and the gate enforces
+    the climb (so a survivor that no longer beats the frontier is blocked)."""
+    return [
+        Rung(code=code, label=f"survivor_{cid}", expect_committed=True,
+             statement=f"Generated Triton RMSNorm survivor {cid} (~{float(speedup):.2f}x swarm-measured)",
+             entry_point=entry_point, generator="swarm")
+        for (cid, code, speedup) in survivor_ladder
+    ]
+
+
+def rungs_from_codes(codes, *, entry_point: str = "rmsnorm_candidate") -> list[Rung]:
+    """Build rungs from a plain list of candidate source strings (ascending speed)."""
+    return [
+        Rung(code=code, label=f"cand{i+1}", expect_committed=True,
+             statement=f"candidate {i+1}", entry_point=entry_point, generator="external")
+        for i, code in enumerate(codes)
+    ]
 
 
 def run_curve(*, oracle=None, db_path: str | None = None, ladder=LADDER, improvement_margin: float = 0.05):
