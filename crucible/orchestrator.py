@@ -155,6 +155,12 @@ class Orchestrator:
     def run_url(self) -> str:
         return self.tracer.run_url
 
+    @property
+    def mission_span_id(self) -> Optional[str]:
+        """The current mission span's id (set during run()) — lets a caller emit
+        sibling spans into the same run (e.g. adversarial detector-probe injections)."""
+        return self._mission_span.span_id if self._mission_span is not None else None
+
     def _oracle_type_hint(self, claim: Claim) -> str:
         return "citation" if claim.claim_type == "existence_claim" else "kernel"
 

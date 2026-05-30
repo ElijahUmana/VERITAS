@@ -19,7 +19,11 @@ only offline.
 ```
 
 That runs the entire FLOOR in order, deterministically, in **under 60 seconds**,
-and **verifies itself live** against the local Raindrop Workshop:
+and **verifies itself live** against the local Raindrop Workshop. The cheat and
+verified-increment verdicts are produced by the **real CRUCIBLE truth-floor gate**
+(`crucible.orchestrator.Orchestrator` + a CPU `ReferenceRMSNormOracle`) — genuine,
+gate-produced, not hand-stamped — yet fully deterministic and keyless (no
+GPU/Modal/network):
 
 | Beat | What you see | What it proves |
 |---|---|---|
@@ -98,11 +102,14 @@ WiFi/Modal hiccup cannot kill the run:
 
 - **Cold open** reads hard-cached CourtListener fixtures (`cold_open/cache/`); the
   live call is a best-effort overlay that never changes the GREEN/RED verdict.
-- **Kernel beats** run off the deterministic rehearsed courtroom trace — no live
-  Modal dependency on the floor. Live Modal is the ceiling, wrapped by
-  `harness/fallback.py` so a failure falls back to the frozen artifact.
-- **Replay** runs in a clearly-labelled `deterministic-floor` mode; the response
-  always states which path ran (`mode`) — no silent fakery.
+- **Cheat / verified beats** run the REAL gate over a CPU reference oracle — genuine
+  verdicts, but no GPU/Modal/key, so they're deterministic and can't be killed by a
+  network hiccup. The real T4 Modal oracle is the ceiling (proven by the `--modal`
+  self-test); if the engine itself is somehow unavailable, the demo falls back to a
+  zero-dependency rehearsed courtroom trace.
+- **Replay** re-verifies the committed increment in-process via the real gate (or a
+  clearly-labelled `deterministic-floor` mode in the fallback) — the response always
+  states which path ran; no silent fakery.
 - `--cached` forces the zero-network deterministic floor end to end.
 
 ---

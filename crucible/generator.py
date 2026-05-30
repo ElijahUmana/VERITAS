@@ -101,8 +101,9 @@ class GenerationResult:
     verdict: Verdict
     gate: GateResult
     source_path: Optional[str]
-    gate_path: str           # "orchestrator" | "static-blocked" | "pending-modal-oracle"
+    gate_path: str           # "orchestrator" | "static-blocked" | "kernel-oracle(no-readback)" | "pending-modal-oracle"
     workshop_url: Optional[str] = None
+    outcome: Optional[object] = None   # crucible.orchestrator.ClaimOutcome when routed through the orchestrator
 
 
 # --------------------------------------------------------------------------- #
@@ -172,124 +173,65 @@ def persist_candidate(candidate: Candidate) -> str:
 # --------------------------------------------------------------------------- #
 # 2. Route through the SAME gate (no trust shortcut)
 # --------------------------------------------------------------------------- #
-def _try_orchestrator(claim: Claim, candidate: Candidate) -> Optional[Verdict]:
-    """If crucible-core's orchestrator is published, run the candidate through the
-    real IO gate (oracle dispatch + ledger + trace) and return its Verdict.
-
-    The exact entry-point name is being coordinated with crucible-core; we probe
-    the agreed/likely names and bail cleanly (returning None) if absent, so the
-    generator never blocks on an unfinished teammate deliverable.
-    """
+def _run_orchestrator(claim: Claim, candidate: Candidate):
+    """PREFERRED path: route through crucible-core's full Orchestrator (oracle
+    router -> Modal/citation oracle -> detector-D trace readback -> truth-floor
+    gate -> ledger -> certificate). Returns the ClaimOutcome, or None if the
+    orchestrator stack isn't importable (then we fall back — never block)."""
     try:
-        from crucible import orchestrator  # type: ignore
+        from crucible.ledger import Ledger
+        from crucible.oracle.base import CitationOracleAdapter, OracleRouter
+        from crucible.oracle.kernel_oracle import KernelOracle
+        from crucible.orchestrator import Orchestrator
     except Exception:
         return None
-    for name in ("evaluate", "evaluate_candidate", "run_candidate", "verify_candidate", "submit"):
-        fn = getattr(orchestrator, name, None)
-        if callable(fn):
-            v = _coerce_verdict(_safe_call(fn, claim, candidate), claim, candidate)
-            if v is not None:
-                return v
-    return None
+    try:
+        router = OracleRouter(default=KernelOracle()).register("existence_claim", CitationOracleAdapter())
+        ledger = Ledger(os.environ.get("VERITAS_LEDGER_DB", str(REPO_ROOT / "veritas_ledger.db")))
+        # Share OUR mission_id so the orchestrator's domain trace stitches to the
+        # generator's proposal trace (both carry crucible.mission_id).
+        orch = Orchestrator(
+            oracle=router, ledger=ledger, mission_id=claim.mission_id,
+            user_id="veritas-generator", convo_id="autoresearch-hackathon",
+        )
+        return orch.evaluate(claim, candidate, mission_name="kernel_generator")
+    except Exception:
+        print("[generator] orchestrator.evaluate raised (non-fatal, falling back):\n"
+              + traceback.format_exc(), file=sys.stderr)
+        return None
 
 
 def _try_kernel_oracle(claim: Claim, candidate: Candidate) -> Optional[Verdict]:
-    """If modal-oracle's kernel oracle is published, verify the candidate directly.
+    """FALLBACK (orchestrator absent): call modal-oracle's kernel oracle directly.
 
-    modal-oracle's documented contract is ``verify(claim: dict, candidate: dict)
-    -> Verdict dict`` where the candidate carries ``source`` (not ``code``), and
-    the returned dict has extra keys (``measured_by``/``details``) that the
-    ``extra='forbid'`` ``schemas.Verdict`` would reject. We bridge pydantic->dict
-    on the way in and coerce the dict->Verdict (extras -> ``evidence``) on the way
-    out. Returns None if the oracle is absent or Modal is not yet deployed (the
-    Modal lookup raises, which we catch and fall back from)."""
+    ``KernelOracle().verify(claim, candidate)`` is the SINGLE canonical bridge — it
+    takes pydantic Claim/Candidate and returns a pydantic ``schemas.Verdict``
+    (oracle internals land in ``Verdict.evidence``), so no coercion is needed."""
     try:
-        from crucible.oracle import kernel_oracle  # type: ignore
+        from crucible.oracle.kernel_oracle import KernelOracle
     except Exception:
         return None
-    claim_d = {
-        "claim_id": claim.claim_id, "claim_type": claim.claim_type,
-        "mission_id": claim.mission_id, "target": claim.target,
-        "speedup_threshold": claim.effective_threshold,
-    }
-    name = None
-    if candidate.source_path:
-        try:
-            name = pathlib.Path(candidate.source_path).stem
-        except Exception:
-            name = None
-    cand_d = {"candidate_id": candidate.candidate_id, "source": candidate.code or "",
-              "backend": "triton", "name": name}
-
-    fn = getattr(kernel_oracle, "verify", None)
-    if callable(fn):
-        v = _coerce_verdict(_safe_call(fn, claim_d, cand_d), claim, candidate)
-        if v is not None:
-            return v
-    cls = getattr(kernel_oracle, "KernelOracle", None)
-    if cls is not None:
-        inst = _safe_call(cls)
-        if inst is not None:
-            v = _coerce_verdict(_safe_call(inst.verify, claim_d, cand_d), claim, candidate)
-            if v is not None:
-                return v
-    return None
-
-
-def _safe_call(fn, *args):
     try:
-        return fn(*args)
+        verdict = KernelOracle().verify(claim, candidate)
     except Exception:
-        print("[generator] gate entry-point raised (non-fatal):\n" + traceback.format_exc(),
+        print("[generator] KernelOracle.verify raised (non-fatal):\n" + traceback.format_exc(),
               file=sys.stderr)
         return None
+    return verdict if isinstance(verdict, Verdict) else None
 
 
-def _coerce_verdict(out, claim: Optional[Claim] = None, candidate: Optional[Candidate] = None) -> Optional[Verdict]:
-    """Accept a Verdict, a (verdict, ...) tuple/list, an object exposing ``.verdict``,
-    or a Verdict-shaped dict (modal-oracle's contract) — coercing the dict into a
-    real ``schemas.Verdict`` with unknown keys routed into ``evidence``."""
-    if out is None:
-        return None
-    if isinstance(out, Verdict):
-        return out
-    v = getattr(out, "verdict", None)
-    if isinstance(v, Verdict):
-        return v
-    if isinstance(out, (tuple, list)):
-        for item in out:
-            r = _coerce_verdict(item, claim, candidate)
-            if r is not None:
-                return r
-        return None
-    if isinstance(out, dict) and "verdict" in out:
-        known = {"claim_id", "candidate_id", "mission_id", "verdict", "oracle_type",
-                 "verifier_status", "correctness_passed", "tamper_detected", "speedup",
-                 "speedup_threshold", "static_check_passed", "blocked_reason", "error", "hardware"}
-        fields = {k: out[k] for k in known if out.get(k) is not None}
-        if claim is not None:
-            fields.setdefault("claim_id", claim.claim_id)
-            fields.setdefault("mission_id", claim.mission_id)
-        if candidate is not None:
-            fields.setdefault("candidate_id", candidate.candidate_id)
-        fields.setdefault("claim_id", out.get("claim_id", "claim"))
-        fields.setdefault("candidate_id", out.get("candidate_id", "candidate"))
-        fields.setdefault("mission_id", out.get("mission_id", "mission"))
-        extras = {k: out[k] for k in out if k not in known}
-        try:
-            return Verdict(**fields, evidence=extras)
-        except Exception:
-            print("[generator] could not coerce oracle dict -> Verdict:\n" + traceback.format_exc(),
-                  file=sys.stderr)
-            return None
-    return None
+def route_through_gate(claim: Claim, candidate: Candidate):
+    """Run the candidate through the SAME gate as a rehearsed candidate. Returns
+    ``(verdict, gate, path, outcome)`` — ``outcome`` is the orchestrator's
+    ClaimOutcome when routed through it, else None. NO trust shortcut on any path."""
+    # --- PREFERRED: crucible-core's full Orchestrator (oracle router + Modal +
+    #     detector-D readback + truth-floor gate + ledger + certificate). ---
+    outcome = _run_orchestrator(claim, candidate)
+    if outcome is not None:
+        return outcome.verdict, outcome.gate, "orchestrator", outcome
 
-
-def route_through_gate(claim: Claim, candidate: Candidate) -> tuple[Verdict, GateResult, str]:
-    """Run the generated candidate through the truth floor. Returns (verdict, gate, path)."""
+    # --- FALLBACK A: static pre-gate (local, before any GPU spend) ---
     from crucible.oracle.static_checker import static_pregate
-
-    # --- Stage 1: STATIC PRE-GATE (real, runs locally before any GPU spend) ---
     static = static_pregate(candidate.code or "", backend="triton", precision="fp32")
     if not static["ok"]:
         verdict = Verdict(
@@ -299,35 +241,27 @@ def route_through_gate(claim: Claim, candidate: Candidate) -> tuple[Verdict, Gat
             blocked_reason=f"static pre-gate blocked: {static['blocked_reason']}",
             evidence={"static_pregate": static},
         )
-        gate = evaluate_truth_floor(claim, verdict, trace_readback_confirmed=False)
-        return verdict, gate, "static-blocked"
+        return verdict, evaluate_truth_floor(claim, verdict, trace_readback_confirmed=False), "static-blocked", None
 
-    # --- Stage 2: MODAL EXECUTION ORACLE (when available) ---
-    # Prefer the full orchestrator (oracle + ledger + trace); fall back to calling
-    # the kernel oracle directly via the FLOOR §2 Oracle protocol. Either path
-    # auto-wires the moment the teammate deliverable is importable.
-    orch_verdict = _try_orchestrator(claim, candidate)
-    if orch_verdict is not None:
-        gate = evaluate_truth_floor(claim, orch_verdict, trace_readback_confirmed=True)
-        return orch_verdict, gate, "orchestrator"
-    kern_verdict = _try_kernel_oracle(claim, candidate)
-    if kern_verdict is not None:
-        gate = evaluate_truth_floor(claim, kern_verdict, trace_readback_confirmed=True)
-        return kern_verdict, gate, "kernel-oracle"
+    # --- FALLBACK B: call the kernel oracle directly (orchestrator unreachable) ---
+    kv = _try_kernel_oracle(claim, candidate)
+    if kv is not None:
+        # Honest: without the orchestrator we did NOT perform the canonical
+        # detector-D Workshop readback, so trace_readback_confirmed stays False
+        # (even a confirmed oracle verdict will not 'commit' on this degraded path).
+        gate = evaluate_truth_floor(claim, kv, trace_readback_confirmed=False)
+        return kv, gate, "kernel-oracle(no-readback)", None
 
-    # --- No GPU oracle yet -> honest UNVERIFIED -> gate BLOCKS (no shortcut) ---
+    # --- FALLBACK C: nothing reachable -> honest UNVERIFIED -> gate BLOCKS ---
     verdict = Verdict(
         claim_id=claim.claim_id, candidate_id=candidate.candidate_id, mission_id=claim.mission_id,
         verdict="unverified", oracle_type="kernel", verifier_status="OK",
         correctness_passed=False, tamper_detected=False, static_check_passed=True,
         speedup=None, speedup_threshold=claim.effective_threshold,
-        blocked_reason=("passed static pre-gate; awaiting Modal execution oracle "
-                        "(modal-oracle Task #2 / orchestrator) — generated candidate NOT trusted"),
-        evidence={"static_pregate": static,
-                  "note": "no execution oracle importable yet; candidate held as unverified"},
+        blocked_reason="passed static pre-gate; no execution oracle reachable — candidate NOT trusted",
+        evidence={"static_pregate": static, "note": "no oracle/orchestrator importable"},
     )
-    gate = evaluate_truth_floor(claim, verdict, trace_readback_confirmed=False)
-    return verdict, gate, "pending-modal-oracle"
+    return verdict, evaluate_truth_floor(claim, verdict, trace_readback_confirmed=False), "pending-modal-oracle", None
 
 
 # --------------------------------------------------------------------------- #
@@ -405,12 +339,23 @@ async def propose_and_gate(
             bridge.flush()
 
     source_path = persist_candidate(candidate) if persist else None
-    verdict, gate, gate_path = route_through_gate(claim, candidate)
-    workshop_url = _emit_spans(claim, candidate, verdict, gate) if emit_spans else None
+    verdict, gate, gate_path, outcome = route_through_gate(claim, candidate)
+
+    # The orchestrator emits its OWN crucible.* domain trace (claim/candidate/
+    # verify/oracle/ledger), sharing our mission_id — so we don't double-emit.
+    # Only emit our own spans on a fallback path where no orchestrator trace exists.
+    if outcome is not None:
+        try:
+            from crucible.trace import BASE
+            workshop_url = f"{BASE}/runs/{outcome.trace_id}"
+        except Exception:
+            workshop_url = None
+    else:
+        workshop_url = _emit_spans(claim, candidate, verdict, gate) if emit_spans else None
 
     return GenerationResult(
         candidate=candidate, proposal=proposal, verdict=verdict, gate=gate,
-        source_path=source_path, gate_path=gate_path, workshop_url=workshop_url,
+        source_path=source_path, gate_path=gate_path, workshop_url=workshop_url, outcome=outcome,
     )
 
 
@@ -430,16 +375,31 @@ def _print_report(res: GenerationResult) -> None:
     print(f"    promotion     : {res.gate.promotion}   promoted={res.gate.promoted}")
     for r in res.gate.reasons:
         print(f"      - {r}")
+    o = res.outcome
+    if o is not None:
+        if getattr(o, "speedup", None) is not None:
+            print(f"    speedup       : {o.speedup}x  (MEASURED by a separate Modal oracle, not claimed)")
+        if getattr(o, "promoted", False):
+            ph = (getattr(o, "proof_hash", "") or "")[:16]
+            print(f"    LEDGER COMMIT : ledger_id={o.ledger_id}  proof_hash={ph}…")
+            if getattr(o, "certificate_id", None):
+                print(f"    certificate   : {o.certificate_id}")
+        if getattr(o, "trace_id", None):
+            print(f"    trace_id      : {o.trace_id}")
     if res.verdict.blocked_reason:
         print(f"    blocked_reason: {res.verdict.blocked_reason}")
     if res.workshop_url:
         print(f"\n  Raindrop courtroom trace: {res.workshop_url}")
-    if res.gate_path == "pending-modal-oracle":
-        print("\n  >> The generated candidate is NOT trusted: it passed the static pre-gate but")
-        print("     is BLOCKED pending Modal execution-oracle verification. The moment the")
-        print("     orchestrator + kernel oracle land, the SAME candidate flows through real")
-        print("     5-seed correctness + dual-timer speed + anti-tamper and is CONFIRMED or")
-        print("     REFUTED on merit. No generator self-certification, ever.\n")
+
+    if res.gate_path == "orchestrator" and res.gate.promoted:
+        print("\n  >> CONFIRMED by a SEPARATE Modal oracle and COMMITTED to the verified ledger.")
+        print("     Not trusted because the agent said so — reproduced under stated bounds.\n")
+    elif res.gate_path == "orchestrator":
+        print("\n  >> BLOCKED on merit by the same truth floor every candidate faces.")
+        print(f"     {res.verdict.blocked_reason or 'see gate reasons above'}\n")
+    elif res.gate_path == "pending-modal-oracle":
+        print("\n  >> Generated candidate NOT trusted: passed static pre-gate, but no execution")
+        print("     oracle was reachable, so the gate BLOCKS it. No self-certification, ever.\n")
 
 
 def main() -> int:

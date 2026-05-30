@@ -13,11 +13,20 @@ actually persisting across runs" (FLOOR DONE checklist).
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
 from crucible.schemas import LedgerRow
+
+# Canonical persistent ledger path (so the generator, orchestrator, and any
+# production run share ONE file for cross-run compounding). Honors the
+# VERITAS_LEDGER_DB env var; defaults to <repo>/veritas_ledger.db (repo-anchored,
+# cwd-independent). The demo deliberately uses its OWN fresh path for a clean
+# stage run — pass db_path explicitly to opt out of the canonical file.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_LEDGER_PATH = os.environ.get("VERITAS_LEDGER_DB") or str(_REPO_ROOT / "veritas_ledger.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS claims (
@@ -57,8 +66,9 @@ class Ledger:
     """A SQLite-backed verified ledger.  Safe to open the same ``db_path`` across
     process runs — that is exactly how run #2 reads run #1's increments."""
 
-    def __init__(self, db_path: str | Path = "veritas_ledger.db"):
-        self.db_path = str(db_path)
+    def __init__(self, db_path: str | Path | None = None):
+        # None -> the canonical persistent path (VERITAS_LEDGER_DB or <repo>/veritas_ledger.db).
+        self.db_path = str(db_path) if db_path is not None else DEFAULT_LEDGER_PATH
         # autocommit (isolation_level=None) + WAL for concurrent read-back during a run.
         self.conn = sqlite3.connect(self.db_path, isolation_level=None)
         self.conn.row_factory = sqlite3.Row

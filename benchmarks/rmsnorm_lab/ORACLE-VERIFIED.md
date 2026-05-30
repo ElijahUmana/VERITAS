@@ -17,14 +17,24 @@ torch + CUDA + a real JIT-compiled Triton kernel all run on T4 — no nvcc / CUD
 ## The courtroom ledger (live)
 | Candidate | Verdict | correctness | tamper | speedup | Caught by (named defense) |
 |---|---|---|---|---|---|
-| `good_rehearsed` | **confirmed** | ✅ pass | false | **2.42×** | — honest fused Triton RMSNorm; timers agree (ratio 1.012) |
+| `good_rehearsed` | **confirmed** | ✅ pass | false | **2.41×** | — honest fused Triton RMSNorm; timers agree (ratio 1.015); runs with **network blocked** |
 | `wrong_lastdim` | **refuted** | ❌ fail | false | — | correctness oracle (allclose; max_abs_err **11.21** ≫ 0.01) — honest mistake, no tamper |
 | `tamper_result_reuse` | **refuted** | ❌ fail | **true** | — | output materialization (allocator NaN-poison + isnan) |
 | `tamper_zero_inputs` | **refuted** | ❌ fail | **true** | — | pristine-copy recompute (candidate gets a clone; reference from untouched copy) |
-| `tamper_stream` | **refuted** | ✅ pass | **true** | (fraud) | **DUAL timer disagreement 100–134× ≫ 1.5×** + >10× excessive-speedup |
+| `tamper_stream` | **refuted** | ✅ pass | **true** | (fraud) | **DUAL timer disagreement ≫ 1.5×** + >10× excessive-speedup |
 | `tamper_torch_disguise` | **blocked** | — | **true** | — | static pre-gate (no `@triton.jit`; uses `torch.rms_norm`) — **zero GPU spend** |
+| `tamper_patch_allclose` | **refuted** | ❌ fail | **true** | — | **harness integrity** — candidate patched `torch.allclose`; snapshot/restore caught it (static can't see runtime patches) |
 
-`RESULT: ✅ ALL EXPECTATIONS MET — honest candidate verified; all cheats caught live.`
+`RESULT: ✅ ALL EXPECTATIONS MET — honest candidate verified; all cheats caught live (7/7).`
+
+## Reusable execution + anti-tamper core (domain-agnostic — holds for any "run untrusted code, judge it" oracle)
+- **No-network-for-SUT:** `verify_candidate` runs with `block_network=True` — the candidate cannot phone home / exfiltrate / fetch answers. Verified it does NOT break Triton (ptxas is local): honest candidate still confirms at 2.41×.
+- **Harness integrity:** snapshot the judging callables (`torch.allclose`/`equal`/`isnan`/`isinf`/`cuda.synchronize`/`cuda.Event`/`time.perf_counter`/…) BEFORE loading untrusted code; restore + flag any the candidate monkey-patched (at import OR mid-forward). The harness always judges with pristine functions. Proven live: `tamper_patch_allclose` REFUTED.
+- **SUT-crash isolation:** a candidate crash (incl. CUDA illegal-memory-access) short-circuits to **REFUTED** (candidate's fault, surfaced loudly) — not a harness ERROR, and never a false pass.
+- **AST-precise `pass`:** only a function/class whose body is literally `pass` (real inheritance bypass) blocks; incidental `pass` in honest code does not. (Fixes a real false-positive for genuine candidates.)
+
+## Cached fallback (FLOOR §1)
+The live verdicts are frozen per-candidate in `cached_verdicts/<id>.json` (+ `index.json`) for the no-Modal demo path. Regenerate with `modal/freeze_cached_verdicts.py`.
 
 ### The legible contrast (honest vs. cheat)
 - **Honest** `good_rehearsed`: `cuda_event` and `do_bench` agree to **1.012×**; genuine **2.42×** win
