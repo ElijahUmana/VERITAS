@@ -141,16 +141,24 @@ def rungs_from_codes(codes, *, entry_point: str = "rmsnorm_candidate") -> list[R
     ]
 
 
-def run_curve(*, oracle=None, db_path: str | None = None, ladder=LADDER, improvement_margin: float = 0.05):
-    """Drive the sequential runs. Returns the list of point dicts (one per run)."""
+def run_curve(*, oracle=None, db_path: str | None = None, rungs=None, target: str | None = None,
+              improvement_margin: float = 0.05):
+    """Drive the sequential, GATE-ENFORCED runs and return the per-run point dicts.
+
+    Defaults to the deterministic CPU floor ladder. For the GPU ``--live`` curve, pass
+    ``oracle=KernelOracle()``, ``target="36_RMSNorm"``, and
+    ``rungs=rungs_from_survivor_ladder(swarm.survivor_ladder(report))`` (+ a shared
+    ``db_path``) — the same gate enforces the climb on the real GPU oracle."""
     oracle = oracle or RedundantReductionOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4))
+    target = target or TARGET
+    rungs = rungs if rungs is not None else _default_cpu_rungs()
     db_path = db_path or str(Path(tempfile.mkdtemp()) / "curve_ledger.db")
     ledger = Ledger(db_path)
     cert_dir = Path(tempfile.gettempdir()) / "crucible_curve_certs"
 
     points: list[dict] = []
-    for i, (passes, expect_committed, label) in enumerate(ladder, start=1):
-        prior = ledger.latest_baseline(TARGET)                    # read the verified frontier
+    for i, rung in enumerate(rungs, start=1):
+        prior = ledger.latest_baseline(target)                    # read the verified frontier
         prior_best = prior.speedup if prior else None
         # gate-enforce monotonic improvement: must beat the frontier by the margin
         threshold = (round(prior_best, 3) + improvement_margin) if prior_best else 1.0
@@ -159,22 +167,21 @@ def run_curve(*, oracle=None, db_path: str | None = None, ladder=LADDER, improve
         orch = Orchestrator(oracle=oracle, ledger=ledger, mission_id=mission,
                             out_dir=cert_dir, event_name=f"veritas_curve_run{i}")
         claim = Claim(
-            mission_id=mission,
-            statement=f"RMSNorm kernel, iteration {i}: eliminate redundant reductions ({passes} passes)",
-            claim_type="speedup_claim", target=TARGET, speedup_threshold=threshold,
+            mission_id=mission, statement=f"iteration {i}: {rung.statement}",
+            claim_type="speedup_claim", target=target, speedup_threshold=threshold,
             baseline_ledger_id=(prior.ledger_id if prior else None),
         )
-        cand = Candidate(claim_id=claim.claim_id, mission_id=mission, code=_candidate_code(passes),
-                         entry_point="rmsnorm_candidate", generator="self-improvement-loop", label=label,
-                         strategy=f"common-subexpression elimination: {passes} reduction pass(es)")
+        cand = Candidate(claim_id=claim.claim_id, mission_id=mission, code=rung.code,
+                         entry_point=rung.entry_point, generator=rung.generator, label=rung.label,
+                         strategy=rung.statement)
         out = orch.evaluate(claim, cand)
 
-        frontier_after = ledger.latest_baseline(TARGET)
+        frontier_after = ledger.latest_baseline(target)
         points.append({
-            "run": i, "label": label, "passes": passes,
+            "run": i, "label": rung.label,
             "speedup": out.speedup, "threshold": threshold, "prior_best": prior_best,
             "promotion": out.promotion, "promoted": out.promoted,
-            "expected_committed": expect_committed,
+            "expected_committed": rung.expect_committed,
             "ledger_id": out.ledger_id, "parent_ledger_id": out.ledger_row.parent_ledger_id,
             "certificate_id": out.certificate_id, "proof_hash": out.ledger_row.proof_hash,
             "trace_id": out.trace_id, "run_url": orch.run_url,
@@ -207,7 +214,7 @@ def _print_curve(points: list[dict], *, live: bool = False) -> None:
         if p["promoted"]:
             filled = int(round((spd - lo) / span * width)) if span > 0 else width
             bar = "█" * max(filled, 1)
-            print(f"  run{p['run']} {spd:5.2f}x │{bar}● verified · cert {p['certificate_id']} · {p['passes']}p")
+            print(f"  run{p['run']} {spd:5.2f}x │{bar}● verified · cert {p['certificate_id']} · {p['label']}")
         else:
             print(f"  run{p['run']} {spd:5.2f}x │  ✗ BLOCKED — did not beat the {p['prior_best']:.2f}× frontier "
                   f"(threshold {p['threshold']:.2f}×); frontier holds")
@@ -215,8 +222,6 @@ def _print_curve(points: list[dict], *, live: bool = False) -> None:
     # parent chain
     chain = " ← ".join(f"run{p['run']}({p['ledger_id'][:10]})" for p in committed)
     print(f"  parent chain (verified frontier): {chain}")
-    if live and len(points) < len(LADDER):
-        print("  …")
 
 
 def verify_curve(points: list[dict]) -> tuple[bool, list[str]]:

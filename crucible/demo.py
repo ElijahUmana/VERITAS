@@ -90,6 +90,11 @@ def _imp(modpath: str):
         return None
 
 
+def _sql(value: str) -> str:
+    """Single-quote-escape a value for inline SQL (run ids are hex, but quote anyway)."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
 def _reset_demo_db() -> pathlib.Path:
     """Fresh demo ledger path so each invocation shows a clean run#1 → run#2."""
     ARTIFACTS.mkdir(exist_ok=True)
@@ -491,23 +496,27 @@ def main() -> int:
     results: dict[str, bool] = {}
     results["cold_open"] = beat_cold_open(tl, mode)
 
-    # Emit the gate-produced courtroom run (real verdicts). Deep fallback: canned trace.
-    run_id, info = _emit_courtroom(ws, db_path, oracle)
     used_canned = False
-    if not run_id:
-        say(ylw("  real engine unavailable — falling back to the rehearsed courtroom trace."))
-        run_id, info = _emit_courtroom_canned(ws)
-        used_canned = True
-    if not run_id:
-        say(red("\n  FATAL — could not produce the courtroom run (engine + fallback both unavailable)."))
-        return 1
-
-    results["cheat"] = beat_cheat(tl, ws, run_id, info)
-    ok_v, run1_info = beat_verified(tl, ws, run_id, info, db_path)
-    results["verified"] = ok_v
-    ok_c, run2_id = beat_compounding(tl, ws, db_path, oracle)
-    results["compounding"] = ok_c
-    results["close"] = beat_close(tl, ws, run_id, run2_id, run1_info)
+    if args.live:
+        # CEILING: live Modal megastructure (concurrent N-T4 fan-out, gate-produced).
+        results.update(run_live_megastructure(tl, ws))
+    else:
+        # FLOOR: gate-produced courtroom on the CPU oracle (or --modal sequential GPU).
+        # Deep fallback only if the engine is entirely unavailable: the rehearsed trace.
+        run_id, info = _emit_courtroom(ws, db_path, oracle)
+        if not run_id:
+            say(ylw("  real engine unavailable — falling back to the rehearsed courtroom trace."))
+            run_id, info = _emit_courtroom_canned(ws)
+            used_canned = True
+        if not run_id:
+            say(red("\n  FATAL — could not produce the courtroom run (engine + fallback both unavailable)."))
+            return 1
+        results["cheat"] = beat_cheat(tl, ws, run_id, info)
+        ok_v, run1_info = beat_verified(tl, ws, run_id, info, db_path)
+        results["verified"] = ok_v
+        ok_c, run2_id = beat_compounding(tl, ws, db_path, oracle)
+        results["compounding"] = ok_c
+        results["close"] = beat_close(tl, ws, run_id, run2_id, run1_info)
 
     within = tl.elapsed_s <= tl.target_s
     tl.report()
@@ -520,8 +529,10 @@ def main() -> int:
     ok = all_landed and within
     print("\n" + bold("═" * 64))
     if ok:
-        gate = "rehearsed fallback" if used_canned else f"real gate · {oracle_label}"
-        print("  " + grn(f"DEMO GREEN — all five beats landed ({gate}), verified live, within budget."))
+        gate = ("live Modal megastructure" if args.live
+                else "rehearsed fallback" if used_canned
+                else f"real gate · {oracle_label}")
+        print("  " + grn(f"DEMO GREEN — all beats landed ({gate}), verified live, within budget."))
     else:
         why = []
         if not all_landed:

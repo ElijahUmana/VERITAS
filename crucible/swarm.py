@@ -2,23 +2,32 @@
 """crucible/swarm.py — CEILING: verified swarm fan-out (Task #11).
 
 Fan out N gpt-5.4-mini-generated RMSNorm candidates IN PARALLEL, each routed
-through the SAME real CRUCIBLE gate (Orchestrator + KernelOracle on Modal). Only
-SURVIVORS — oracle-confirmed, no tamper, speedup ≥ threshold, detector-D trace
-readback — commit to the shared verified ledger. Every candidate lands in the
-Raindrop swarm courtroom under one shared ``crucible.mission_id``.
+through the SAME real CRUCIBLE gate — ONLY survivors (oracle-confirmed, no
+tamper, speedup ≥ threshold, detector-D readback) commit to the verified ledger.
+Every candidate lands in the Raindrop swarm courtroom under one shared
+``crucible.mission_id``.
 
-This is the "1000-agent megastructure runs genuine hypothesis → verify →
-compound campaigns" beat at demo scale: real breadth, a real verified-survivor
-rate, real cost — NO canned verdicts, no trust shortcut.
+The "1000-agent megastructure runs genuine hypothesis → verify → compound
+campaigns" beat at demo scale: real breadth, a real verified-survivor rate, real
+cost — NO canned verdicts, no trust shortcut.
 
-Parallelism:
-  * PROPOSE — N concurrent gpt-5.4-mini structured-output calls (asyncio),
-    each with a DISTINCT approach directive so the survivor rate is meaningful.
-  * VERIFY  — each candidate routed through its own Orchestrator (sharing the
-    swarm ``mission_id``) on a worker thread; the blocking Modal ``.remote``
-    calls fan out across concurrent T4 containers (deploy-once-call-many).
-    Survivors commit to the canonical WAL ledger (``Ledger()``), so they feed
-    crucible-core's compounding curve (#9).
+ARCHITECTURE (converged on the single megastructure engine):
+  * PROPOSE — N concurrent gpt-5.4-mini structured-output calls (asyncio), each
+    with a DISTINCT approach directive so the survivor rate is meaningful (this
+    module's job).
+  * VERIFY  — delegated to modal-oracle's ``crucible.live_swarm.run_megastructure``
+    (the deploy-once Modal ``verify_candidate.map()`` concurrent path): static
+    pre-gate, fan out survivors across distinct live T4 sandboxes, drive every
+    verdict through the real Orchestrator gate + ledger + certificate, all in ONE
+    trace. We pass ``members=[]`` so the swarm is PURELY our generated candidates.
+  * run_megastructure is SYNC (Modal ``fn.map`` can't iterate from async), so we
+    do async-propose in its own loop, then call it synchronously.
+
+Handoff helpers for the megastructure chain (#9/#10):
+  * ``generate_candidate_sources(n)`` → ``[(cid, code, "")]`` for direct
+    ``run_megastructure(extra_sources=...)`` consumption.
+  * ``survivor_ladder(report)``       → strictly-increasing survivor codes for
+    crucible-core's GPU self-improvement curve (``run_curve``).
 
 Usage:
     .venv/bin/python crucible/swarm.py --n 10
@@ -32,7 +41,6 @@ import asyncio
 import os
 import pathlib
 import sys
-import time
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
@@ -79,14 +87,17 @@ class SwarmReport:
     survivors: int
     survivor_rate: float
     by_verdict: dict
-    total_verify_seconds: float
+    n_sandboxes: int
+    parallelism: int
+    fanout_wall_s: float
     cost: dict
     ledger_path: str
+    trace_id: Optional[str] = None
     results: list = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
-# PROPOSE — N diverse candidates in parallel
+# PROPOSE — N diverse candidates in parallel (this module's job)
 # --------------------------------------------------------------------------- #
 async def propose_swarm(mission_id: str, n: int, model: str, concurrency: int) -> list[tuple]:
     sem = asyncio.Semaphore(max(1, concurrency))
@@ -106,8 +117,6 @@ async def propose_swarm(mission_id: str, n: int, model: str, concurrency: int) -
                     claim, model=model, extra_directive=hint,
                     label=f"swarm_{idx:02d}", meta_extra={"swarm_index": idx},
                 )
-                # No disk persistence: the oracle verifies candidate.code inline
-                # (KernelOracle reads .code first), so N files/run would be pure clutter.
                 return (claim, candidate)
             except Exception as e:
                 print(f"[swarm] propose #{idx} FAILED: {type(e).__name__}: {e}", file=sys.stderr)
@@ -119,116 +128,102 @@ async def propose_swarm(mission_id: str, n: int, model: str, concurrency: int) -
 
 
 # --------------------------------------------------------------------------- #
-# VERIFY — each candidate through its OWN Orchestrator (shared mission_id),
-# concurrent via worker threads so Modal .remote fans out across T4 containers.
-# --------------------------------------------------------------------------- #
-def _verify_one_sync(claim: Claim, candidate, mission_id: str, idx: int, ledger_path: Optional[str]) -> dict:
-    from crucible.ledger import Ledger
-    from crucible.oracle.base import CitationOracleAdapter, OracleRouter
-    from crucible.oracle.kernel_oracle import KernelOracle
-    from crucible.orchestrator import Orchestrator
-
-    t0 = time.monotonic()
-    base = {"idx": idx, "candidate_id": candidate.candidate_id, "label": candidate.label,
-            "strategy": candidate.strategy,
-            "claimed_speedup": (candidate.metadata or {}).get("claimed_speedup")}
-    try:
-        ledger = Ledger(ledger_path) if ledger_path else Ledger()  # Ledger() = canonical path
-        try:
-            ledger.conn.execute("PRAGMA busy_timeout=8000")  # tolerate concurrent writers (WAL)
-        except Exception:
-            pass
-        router = OracleRouter(default=KernelOracle()).register("existence_claim", CitationOracleAdapter())
-        orch = Orchestrator(
-            oracle=router, ledger=ledger, mission_id=mission_id, annotate=False,
-            user_id="veritas-swarm", convo_id="autoresearch-hackathon",
-        )
-        outcome = orch.evaluate(claim, candidate, mission_name=f"swarm[{idx}]:{candidate.label}")
-        return {
-            **base, "status": "ok",
-            "verdict": outcome.verdict.verdict, "promoted": bool(outcome.promoted),
-            "promotion": outcome.promotion, "speedup": getattr(outcome, "speedup", None),
-            "ledger_id": getattr(outcome, "ledger_id", None),
-            "trace_id": getattr(outcome, "trace_id", None),
-            "blocked_reason": outcome.blocked_reason, "seconds": time.monotonic() - t0,
-        }
-    except Exception as e:
-        print(f"[swarm] verify #{idx} ERROR: {type(e).__name__}: {e}", file=sys.stderr)
-        return {**base, "status": "error", "verdict": None, "promoted": False,
-                "promotion": "blocked", "error": f"{type(e).__name__}: {e}",
-                "seconds": time.monotonic() - t0}
-
-
-async def verify_swarm(items: list[tuple], mission_id: str, concurrency: int,
-                       ledger_path: Optional[str]) -> list[dict]:
-    sem = asyncio.Semaphore(max(1, concurrency))
-
-    async def _verify(idx: int, claim: Claim, candidate):
-        async with sem:
-            return await asyncio.to_thread(_verify_one_sync, claim, candidate, mission_id, idx, ledger_path)
-
-    print(f"[swarm] verifying {len(items)} candidates through the REAL gate "
-          f"(≤{concurrency} concurrent Modal T4 containers)…", file=sys.stderr)
-    return await asyncio.gather(*[_verify(i, c, cand) for i, (c, cand) in enumerate(items)])
-
-
-# --------------------------------------------------------------------------- #
-def _cost_estimate(total_verify_seconds: float, proposed: int) -> dict:
-    gpu = total_verify_seconds * T4_USD_PER_SEC
+def _cost_estimate(fanout_wall_s: float, parallelism: int, proposed: int) -> dict:
+    # The .map fan-out runs concurrently across distinct sandboxes; wall-clock is
+    # the concurrent window, so total billed GPU-seconds ≈ window × parallelism
+    # (an UPPER BOUND — sandboxes finish at different times).
+    gpu_s = (fanout_wall_s or 0.0) * max(1, parallelism)
+    gpu = gpu_s * T4_USD_PER_SEC
     gen = proposed * GEN_USD_PER_CANDIDATE
     return {
         "t4_usd_per_sec": T4_USD_PER_SEC,
-        "verify_wallclock_seconds": round(total_verify_seconds, 1),
+        "fanout_wall_s": round(fanout_wall_s or 0.0, 1),
+        "parallelism": parallelism,
+        "est_gpu_seconds_upper_bound": round(gpu_s, 1),
         "est_gpu_usd_upper_bound": round(gpu, 4),
         "est_generation_usd": round(gen, 4),
         "est_total_usd": round(gpu + gen, 4),
-        "note": ("GPU figure is an UPPER BOUND — verify wall-clock includes Modal container "
-                 "cold-start + client overhead, not only billed GPU-seconds. Generation cost is "
-                 "a rough gpt-5.4-mini per-candidate estimate."),
+        "note": ("GPU = UPPER BOUND (concurrent window × parallelism). .map fans out across "
+                 "distinct T4 sandboxes — wall-clock is the concurrent window, not the sum. "
+                 "Generation cost is a rough gpt-5.4-mini per-candidate estimate."),
     }
 
 
-def _build_report(mission_id, requested, items, results, ledger_path) -> SwarmReport:
+def _build_report(mission_id, requested, items, mega, ledger_path) -> SwarmReport:
     from crucible.ledger import DEFAULT_LEDGER_PATH
-    proposed = len(items)
-    # Attach source code to SURVIVOR results so they can feed crucible-core's GPU
-    # curve (run_curve ladder) — survivors only, to keep the report light.
     code_map = {c.candidate_id: c.code for (_c, c) in items}
-    for r in results:
-        if r.get("promoted"):
-            r["code"] = code_map.get(r.get("candidate_id"))
-    survivors = sum(1 for r in results if r.get("promoted"))
-    by_verdict = Counter((r.get("verdict") if r.get("status") == "ok" else "error") or "unknown"
-                         for r in results)
-    total_secs = sum(r.get("seconds", 0.0) for r in results if r.get("status") == "ok")
+    results = []
+    for m in mega.members:
+        promoted = bool(m.promoted)
+        results.append({
+            "candidate_id": m.candidate_id, "label": m.label, "verdict": m.verdict,
+            "promoted": promoted, "promotion": ("committed" if promoted else "blocked"),
+            "speedup": m.speedup, "ledger_id": m.ledger_id, "proof_hash": m.proof_hash,
+            "tamper_detected": m.tamper_detected, "blocked_reason": m.blocked_reason,
+            "modal_task_id": m.modal_task_id, "status": "ok",
+            # survivor source code (for survivor_ladder → run_curve); survivors only.
+            "code": code_map.get(m.candidate_id) if promoted else None,
+        })
+    proposed = len(items)
+    survivors = sum(1 for r in results if r["promoted"])
+    by_verdict = dict(Counter(r["verdict"] or "unknown" for r in results))
     return SwarmReport(
         mission_id=mission_id, requested=requested, proposed=proposed,
         survivors=survivors, survivor_rate=(survivors / proposed if proposed else 0.0),
-        by_verdict=dict(by_verdict), total_verify_seconds=total_secs,
-        cost=_cost_estimate(total_secs, proposed),
-        ledger_path=ledger_path or DEFAULT_LEDGER_PATH, results=results,
+        by_verdict=by_verdict, n_sandboxes=mega.n_sandboxes, parallelism=mega.parallelism,
+        fanout_wall_s=mega.fanout_wall_s,
+        cost=_cost_estimate(mega.fanout_wall_s, mega.parallelism or mega.n_sandboxes, proposed),
+        ledger_path=ledger_path or DEFAULT_LEDGER_PATH, trace_id=mega.trace_id, results=results,
     )
 
 
-async def run_swarm(*, n: int, model: str, propose_concurrency: int,
-                    verify_concurrency: int, ledger_path: Optional[str]) -> SwarmReport:
+def _empty_report(mission_id, requested, ledger_path) -> SwarmReport:
+    from crucible.ledger import DEFAULT_LEDGER_PATH
+    return SwarmReport(mission_id=mission_id, requested=requested, proposed=0, survivors=0,
+                       survivor_rate=0.0, by_verdict={}, n_sandboxes=0, parallelism=0,
+                       fanout_wall_s=0.0, cost=_cost_estimate(0.0, 0, 0),
+                       ledger_path=ledger_path or DEFAULT_LEDGER_PATH, results=[])
+
+
+def run_swarm(*, n: int, model: str, propose_concurrency: int,
+              ledger_path: Optional[str]) -> SwarmReport:
+    """Propose N diverse candidates (async), then verify them through modal-oracle's
+    concurrent .map megastructure engine (sync). Returns a SwarmReport.
+
+    SYNC by design: run_megastructure uses Modal ``fn.map`` which cannot iterate
+    from inside an event loop, so propose runs in its own ``asyncio.run`` first."""
+    from crucible.ledger import Ledger
+    from crucible.live_swarm import run_megastructure
     from crucible.raindrop_bridge import install_raindrop_bridge
 
     mission_id = new_id("swarm")
     print(f"[swarm] mission_id={mission_id}", file=sys.stderr)
+
+    # PROPOSE (async, in its own loop) — bridge captures the LLM spans.
     bridge = install_raindrop_bridge(user_id="veritas-swarm", convo_id="autoresearch-hackathon")
     try:
-        items = await propose_swarm(mission_id, n, model, propose_concurrency)
+        items = asyncio.run(propose_swarm(mission_id, n, model, propose_concurrency))
     finally:
         if bridge is not None:
             bridge.flush()
     if not items:
-        return _build_report(mission_id, n, [], [], ledger_path)
-    results = await verify_swarm(items, mission_id, verify_concurrency, ledger_path)
-    results.sort(key=lambda r: r.get("idx", 0))
-    return _build_report(mission_id, n, items, results, ledger_path)
+        return _empty_report(mission_id, n, ledger_path)
+
+    # VERIFY (sync) — modal-oracle's concurrent .map engine, PURELY our generated
+    # candidates (members=[]), each through the real gate; survivors commit.
+    print(f"[swarm] verifying {len(items)} candidates via the concurrent .map engine "
+          f"(distinct Modal T4 sandboxes)…", file=sys.stderr)
+    extra_sources = [(c.candidate_id, c.code, "") for (_c, c) in items]
+    ledger = Ledger(ledger_path) if ledger_path else Ledger()
+    mega = run_megastructure(
+        members=[], extra_sources=extra_sources, compounding=False,
+        ledger=ledger, mission_id=mission_id,
+    )
+    return _build_report(mission_id, n, items, mega, ledger_path)
 
 
+# --------------------------------------------------------------------------- #
+# Handoff helpers for the megastructure chain (#9 curve / #10 live demo)
 # --------------------------------------------------------------------------- #
 def survivor_ladder(report: SwarmReport) -> list[tuple]:
     """Swarm survivors as a STRICTLY-INCREASING-speedup ladder for crucible-core's
@@ -263,6 +258,7 @@ def generate_candidate_sources(
     return [(c.candidate_id, c.code, "") for (_c, c) in items]
 
 
+# --------------------------------------------------------------------------- #
 def _print_report(rep: SwarmReport) -> None:
     print("\n  VERITAS — VERIFIED SWARM FAN-OUT (the megastructure at demo scale)\n")
     print(f"  mission_id      : {rep.mission_id}   (the swarm courtroom — query crucible.mission_id)")
@@ -270,29 +266,28 @@ def _print_report(rep: SwarmReport) -> None:
     print(f"  SURVIVORS (committed): {rep.survivors}/{rep.proposed}  "
           f"= {rep.survivor_rate*100:.0f}% verified-survivor rate")
     print(f"  verdict breakdown    : {rep.by_verdict}")
+    print(f"  concurrency          : {rep.n_sandboxes} distinct Modal T4 sandboxes "
+          f"(parallelism {rep.parallelism}), {rep.fanout_wall_s:.1f}s concurrent fan-out")
     c = rep.cost
     print(f"  cost (estimate)      : ~${c['est_total_usd']} "
-          f"(GPU ≤${c['est_gpu_usd_upper_bound']} over {c['verify_wallclock_seconds']}s @ "
+          f"(GPU ≤${c['est_gpu_usd_upper_bound']} / {c['est_gpu_seconds_upper_bound']}s @ "
           f"${c['t4_usd_per_sec']}/s T4 + gen ~${c['est_generation_usd']})")
     print(f"  ledger               : {rep.ledger_path}")
+    if rep.trace_id:
+        print(f"  trace                : {rep.trace_id}")
     print(f"\n  per-candidate (only survivors commit — same gate as every candidate):")
-    print(f"    {'#':>2}  {'verdict':10} {'promotion':10} {'speedup':>8}  {'claimed':>7}  detail")
+    print(f"    {'verdict':10} {'promotion':10} {'speedup':>8}  detail")
     for r in rep.results:
         sp = r.get("speedup")
         sp_s = f"{sp:.2f}x" if isinstance(sp, (int, float)) else "—"
-        cl = r.get("claimed_speedup")
-        cl_s = f"{cl:.2f}x" if isinstance(cl, (int, float)) else "—"
         detail = ""
         if r.get("promoted"):
             detail = f"COMMITTED ledger={r.get('ledger_id')}"
-        elif r.get("status") == "error":
-            detail = f"verifier error: {r.get('error','')[:60]}"
         elif r.get("blocked_reason"):
-            detail = f"blocked: {r['blocked_reason'][:60]}"
-        print(f"    {r.get('idx'):>2}  {str(r.get('verdict')):10} {str(r.get('promotion')):10} "
-              f"{sp_s:>8}  {cl_s:>7}  {detail}")
+            detail = f"blocked: {str(r['blocked_reason'])[:60]}"
+        print(f"    {str(r.get('verdict')):10} {str(r.get('promotion')):10} {sp_s:>8}  {detail}")
     print(f"\n  >> {rep.survivors} verified increment(s) entered the compounding ledger; "
-          f"the rest were blocked on merit. {c['note']}\n")
+          f"the rest blocked on merit. {c['note']}\n")
 
 
 def _reset_ledger(path: str) -> None:
@@ -311,8 +306,6 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=10, help="number of candidates to fan out")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--propose-concurrency", type=int, default=8)
-    ap.add_argument("--verify-concurrency", type=int, default=6,
-                    help="concurrent Modal T4 verifications (containers)")
     ap.add_argument("--ledger", default=None,
                     help="ledger db path (default: canonical VERITAS_LEDGER_DB / <repo>/veritas_ledger.db)")
     ap.add_argument("--reset-ledger", action="store_true",
@@ -337,12 +330,8 @@ def main() -> int:
         _reset_ledger(args.ledger or DEFAULT_LEDGER_PATH)
 
     try:
-        rep = asyncio.run(run_swarm(
-            n=args.n, model=args.model,
-            propose_concurrency=args.propose_concurrency,
-            verify_concurrency=args.verify_concurrency,
-            ledger_path=args.ledger,
-        ))
+        rep = run_swarm(n=args.n, model=args.model,
+                        propose_concurrency=args.propose_concurrency, ledger_path=args.ledger)
     except Exception:
         print("swarm FAILED:\n" + traceback.format_exc(), file=sys.stderr)
         return 1
@@ -352,8 +341,10 @@ def main() -> int:
         print(json.dumps({
             "mission_id": rep.mission_id, "requested": rep.requested, "proposed": rep.proposed,
             "survivors": rep.survivors, "survivor_rate": rep.survivor_rate,
-            "by_verdict": rep.by_verdict, "cost": rep.cost, "ledger_path": rep.ledger_path,
-            "results": rep.results,
+            "by_verdict": rep.by_verdict, "n_sandboxes": rep.n_sandboxes,
+            "parallelism": rep.parallelism, "fanout_wall_s": rep.fanout_wall_s,
+            "cost": rep.cost, "ledger_path": rep.ledger_path, "trace_id": rep.trace_id,
+            "results": [{k: v for k, v in r.items() if k != "code"} for r in rep.results],
         }, indent=2, default=str))
     else:
         _print_report(rep)
