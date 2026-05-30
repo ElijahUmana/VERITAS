@@ -3,7 +3,7 @@
 The ceiling beat: N candidates fan out across M real Modal T4 sandboxes CONCURRENTLY (the
 megastructure made real — proven by M distinct MODAL_TASK_IDs), every verdict GATE-PRODUCED
 through crucible-core's Orchestrator (cheats blocked, the honest increment committed), then
-run#2 compounds on run#1's verified ledger row. The honest 2.42x is a real measured win; the
+run#2 compounds on run#1's verified ledger row. The honest 2.41x is a real measured win; the
 stream cheat is caught by the dual-timer disagreement (the verdict). Nothing canned.
 
 Design: the slow part (the live Modal verification) is fanned out concurrently FIRST; the
@@ -12,12 +12,16 @@ resulting LIVE verdicts are then driven through the real Orchestrator (spans + t
 without verifying any candidate twice. Disguise/bypass cheats are static-pre-gated client-side
 and never spin a sandbox (they die before GPU spend).
 
+Members can come from rmsnorm_lab candidate FILES (by label) or as RAW SOURCE strings (the
+openai-generator's live candidates, Task #11) — see `run_megastructure(extra_sources=...)`.
+
 modal-oracle owns this live-oracle flow; demo-verifier wires `run_megastructure()` into
 demo.py --live and narrates it.
 """
 from __future__ import annotations
 
 import time
+from collections import namedtuple
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -35,13 +39,16 @@ TARGET = "36_RMSNorm"
 
 # Default swarm: a cheat + the honest increment + two more cheats. All pass the static gate and
 # reach Modal (so they spin real sandboxes); their judges are runtime. Callers append generated
-# candidates (Task #11) via `extra`.
+# candidates (Task #11) via `extra` (file labels) or `extra_sources` (raw source strings).
 DEFAULT_SWARM = [
     ("tamper_stream", "refuted"),       # dual-timer disagreement (the narrated verdict)
-    ("good_rehearsed", "confirmed"),    # the real 2.42x BW-bound win -> committed
+    ("good_rehearsed", "confirmed"),    # the real 2.41x BW-bound win -> committed
     ("wrong_lastdim", "refuted"),       # honest mistake, correctness fail
     ("tamper_result_reuse", "refuted"), # materialization / poison+isnan
 ]
+
+# Internal normalized member: a stable id, a display label, the source string, the expected verdict.
+_Member = namedtuple("_Member", "cid label source expect")
 
 
 @dataclass
@@ -55,7 +62,6 @@ class MemberOutcome:
     speedup: Optional[float]
     blocked_reason: Optional[str]
     modal_task_id: Optional[str]      # which Modal container verified it (None if static-pre-gated)
-    sandbox_seconds: Optional[float]  # wall time of its concurrent Modal call
     ledger_id: Optional[str]
     proof_hash: Optional[str]
 
@@ -64,7 +70,7 @@ class MemberOutcome:
 class MegastructureResult:
     members: list[MemberOutcome]
     n_candidates: int
-    n_sandboxes: int                  # distinct MODAL_TASK_IDs (the megastructure size)
+    n_sandboxes: int                  # distinct MODAL_TASK_IDs (the megastructure width)
     sandbox_ids: list[str]
     fanout_wall_s: float              # wall time of the concurrent fan-out (whole swarm)
     parallelism: int                  # distinct live T4 containers used at once (megastructure width)
@@ -100,15 +106,31 @@ class FannedOracle:
 
 
 def _cid(label: str) -> str:
-    return f"cnd_{label}"
+    return label if label.startswith("cnd_") else f"cnd_{label}"
 
 
-def _payload(label: str, source: str, spec: Optional[dict]) -> dict:
+def _resolve_members(
+    members: list[tuple[str, str]],
+    extra: Optional[list[tuple[str, str]]],
+    extra_sources: Optional[list[tuple[str, str, str]]],
+) -> list[_Member]:
+    """Normalize file-label members [(label, expect)] and raw-source members
+    [(cid, source, expect)] into a single _Member list."""
+    out: list[_Member] = []
+    for label, expect in list(members) + list(extra or []):
+        out.append(_Member(_cid(label), label, candidate_source(label), expect))
+    for cid, source, expect in (extra_sources or []):
+        cid = _cid(cid)
+        out.append(_Member(cid, cid, source, expect))
+    return out
+
+
+def _payload(m: _Member, spec: Optional[dict]) -> dict:
     p = {
         "reference_src": reference_source(),
-        "candidate_src": source,
-        "claim_id": f"clm_{label}",
-        "candidate_id": _cid(label),
+        "candidate_src": m.source,
+        "claim_id": f"clm_{m.label}",
+        "candidate_id": m.cid,
         "backend": "triton",
         "precision": "fp32",
     }
@@ -119,9 +141,9 @@ def _payload(label: str, source: str, spec: Optional[dict]) -> dict:
     return p
 
 
-def _blocked_dict(label: str, static: dict) -> dict:
+def _blocked_dict(m: _Member, static: dict) -> dict:
     return {
-        "verdict": "blocked", "claim_id": f"clm_{label}", "candidate_id": _cid(label),
+        "verdict": "blocked", "claim_id": f"clm_{m.label}", "candidate_id": m.cid,
         "oracle_type": "kernel", "correctness_passed": False, "speedup": None,
         "tamper_detected": True, "verifier_status": "OK",
         "blocked_reason": f"static pre-gate: {static['blocked_reason']}",
@@ -130,7 +152,7 @@ def _blocked_dict(label: str, static: dict) -> dict:
     }
 
 
-def fan_out(members: list[tuple[str, str]], spec: Optional[dict] = None) -> tuple[dict[str, dict], dict]:
+def fan_out(members: list[_Member], spec: Optional[dict] = None) -> tuple[dict[str, dict], dict]:
     """Static-pre-gate, then CONCURRENTLY verify the survivors on Modal via .map() (proven in
     phase-zero to scale out across distinct containers). Returns
     ({candidate_id: live_verdict_dict}, telemetry). Disguise/bypass cheats are pre-gated
@@ -138,24 +160,23 @@ def fan_out(members: list[tuple[str, str]], spec: Optional[dict] = None) -> tupl
     import modal
 
     verdicts: dict[str, dict] = {}
-    modal_batch: list[tuple[str, str]] = []
-    for label, _expect in members:
-        src = candidate_source(label)
-        st = static_checker.static_pregate(src, backend="triton")
+    modal_batch: list[_Member] = []
+    for m in members:
+        st = static_checker.static_pregate(m.source, backend="triton")
         if not st["ok"]:
-            verdicts[_cid(label)] = _blocked_dict(label, st)  # no GPU spend
+            verdicts[m.cid] = _blocked_dict(m, st)  # no GPU spend
         else:
-            modal_batch.append((label, src))
+            modal_batch.append(m)
 
-    payloads = [_payload(label, src, spec) for label, src in modal_batch]
+    payloads = [_payload(m, spec) for m in modal_batch]
     fanout_wall = 0.0
     if payloads:
         fn = modal.Function.from_name(APP_NAME, FUNCTION_NAME)
         t0 = time.monotonic()
         results = list(fn.map(payloads))          # concurrent fan-out across containers
         fanout_wall = round(time.monotonic() - t0, 2)
-        for (label, _src), vdict in zip(modal_batch, results):
-            verdicts[_cid(label)] = vdict
+        for m, vdict in zip(modal_batch, results):
+            verdicts[m.cid] = vdict
 
     return verdicts, {"fanout_wall_s": fanout_wall, "n_modal": len(payloads)}
 
@@ -164,38 +185,43 @@ def run_megastructure(
     members: Optional[list[tuple[str, str]]] = None,
     *,
     extra: Optional[list[tuple[str, str]]] = None,
+    extra_sources: Optional[list[tuple[str, str, str]]] = None,
     compounding: bool = True,
     spec: Optional[dict] = None,
     ledger: Any = None,
     mission_id: str = "msn_megastructure",
     out_dir: str = "certificates",
 ) -> MegastructureResult:
-    """Run the live megastructure beat. `members` = list of (candidate_label, expected_verdict);
-    `extra` appends more (e.g. openai-generator's candidates for #11). Pass a `ledger` (else a
-    temp one is used). Returns a MegastructureResult for demo.py --live to narrate."""
+    """Run the live megastructure beat.
+
+    members:       [(candidate_label, expected_verdict)] from rmsnorm_lab/candidates/ (default swarm)
+    extra:         more file-label members to append
+    extra_sources: [(candidate_id, source_str, expected)] — RAW source (the generator's live
+                   candidates, Task #11); no file needed
+    ledger:        a crucible.ledger.Ledger (else a temp one is used)
+    Returns a MegastructureResult for demo.py --live to narrate.
+    """
     from crucible.ledger import Ledger
     from crucible.orchestrator import Orchestrator
 
-    members = list(members or DEFAULT_SWARM)
-    if extra:
-        members += extra
+    members_resolved = _resolve_members(list(members or DEFAULT_SWARM), extra, extra_sources)
 
     if ledger is None:
         import tempfile
         ledger = Ledger(f"{tempfile.mkdtemp(prefix='veritas_mega_')}/ledger.db")
 
     # 1) CONCURRENT FAN-OUT on Modal (the megastructure).
-    verdicts, tele = fan_out(members, spec)
+    verdicts, tele = fan_out(members_resolved, spec)
 
     # 2) Drive the live verdicts through the REAL gate (spans + truth-floor + ledger).
     orch = Orchestrator(oracle=FannedOracle(verdicts), ledger=ledger, mission_id=mission_id, out_dir=out_dir)
     items = []
-    for label, _expect in members:
-        claim = Claim(mission_id=mission_id, statement=f"a faster RMSNorm via {label}",
-                      claim_type="speedup_claim", target=TARGET, speedup_threshold=(spec or {}).get("speedup_threshold", 1.2))
-        cand = Candidate(claim_id=claim.claim_id, mission_id=mission_id, candidate_id=_cid(label),
-                         code=candidate_source(label) if label_exists(label) else "# pre-gated",
-                         label=label, generator="rehearsed", metadata={"backend": "triton"})
+    for m in members_resolved:
+        claim = Claim(mission_id=mission_id, statement=f"a faster RMSNorm via {m.label}",
+                      claim_type="speedup_claim", target=TARGET,
+                      speedup_threshold=(spec or {}).get("speedup_threshold", 1.2))
+        cand = Candidate(claim_id=claim.claim_id, mission_id=mission_id, candidate_id=m.cid,
+                         code=m.source, label=m.label, generator="rehearsed", metadata={"backend": "triton"})
         items.append((claim, cand))
     outcomes = orch.run(items) or orch.outcomes
 
@@ -203,16 +229,14 @@ def run_megastructure(
     out_by_cid = {o.candidate_id: o for o in outcomes}
     members_out: list[MemberOutcome] = []
     sandbox_ids: list[str] = []
-    for label, _expect in members:
-        cid = _cid(label)
-        o = out_by_cid.get(cid)
-        vd = verdicts.get(cid, {})
-        sbox = (vd.get("details") or {}).get("sandbox") or {}
-        tid = sbox.get("modal_task_id")
+    for m in members_resolved:
+        o = out_by_cid.get(m.cid)
+        vd = verdicts.get(m.cid, {})
+        tid = ((vd.get("details") or {}).get("sandbox") or {}).get("modal_task_id")
         if tid:
             sandbox_ids.append(tid)
         members_out.append(MemberOutcome(
-            label=label, candidate_id=cid,
+            label=m.label, candidate_id=m.cid,
             verdict=(o.verdict.verdict if o else vd.get("verdict", "unverified")),
             promoted=(o.promoted if o else False),
             correctness_passed=(o.verdict.correctness_passed if o else False),
@@ -220,16 +244,14 @@ def run_megastructure(
             speedup=(o.verdict.speedup if o else vd.get("speedup")),
             blocked_reason=(o.blocked_reason if o else vd.get("blocked_reason")),
             modal_task_id=tid,
-            sandbox_seconds=None,
             ledger_id=(o.ledger_id if o else None),
             proof_hash=(o.proof_hash if o else None),
         ))
 
     distinct = sorted(set(sandbox_ids))
-
     result = MegastructureResult(
         members=members_out,
-        n_candidates=len(members),
+        n_candidates=len(members_resolved),
         n_sandboxes=len(distinct),
         sandbox_ids=distinct,
         fanout_wall_s=tele["fanout_wall_s"],
@@ -245,15 +267,15 @@ def run_megastructure(
     if compounding:
         baseline = ledger.latest_baseline(TARGET)
         if baseline is not None:
-            v2, _ = fan_out([("good_rehearsed", "confirmed")], spec)
+            m2 = _Member(_cid("good_rehearsed"), "good_rehearsed", candidate_source("good_rehearsed"), "confirmed")
+            v2, _ = fan_out([m2], spec)
             orch2 = Orchestrator(oracle=FannedOracle(v2), ledger=ledger, mission_id=mission_id, out_dir=out_dir)
             claim2 = Claim(mission_id=mission_id, statement="a further-improved RMSNorm (run#2)",
-                           claim_type="speedup_claim", target=TARGET, speedup_threshold=(spec or {}).get("speedup_threshold", 1.2))
-            cand2 = Candidate(claim_id=claim2.claim_id, mission_id=mission_id, candidate_id=_cid("good_rehearsed"),
-                              code=candidate_source("good_rehearsed"), label="good_rehearsed",
-                              generator="rehearsed", metadata={"backend": "triton"})
-            o2list = orch2.run([(claim2, cand2)]) or orch2.outcomes
-            o2 = o2list[0]
+                           claim_type="speedup_claim", target=TARGET,
+                           speedup_threshold=(spec or {}).get("speedup_threshold", 1.2))
+            cand2 = Candidate(claim_id=claim2.claim_id, mission_id=mission_id, candidate_id=m2.cid,
+                              code=m2.source, label=m2.label, generator="rehearsed", metadata={"backend": "triton"})
+            o2 = (orch2.run([(claim2, cand2)]) or orch2.outcomes)[0]
             result.compounding = {
                 "baseline_ledger_id": baseline.ledger_id,
                 "baseline_speedup": baseline.speedup,
@@ -264,12 +286,6 @@ def run_megastructure(
             }
 
     return result
-
-
-def label_exists(label: str) -> bool:
-    import pathlib
-    return (pathlib.Path(__file__).resolve().parents[1] / "benchmarks" / "rmsnorm_lab"
-            / "candidates" / f"{label}.py").exists()
 
 
 if __name__ == "__main__":

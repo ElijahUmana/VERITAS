@@ -117,6 +117,7 @@ class ReferenceRMSNormOracle:
         timing_trials: int = 30,
         base_seed: int = 42,
         hidden_seed: int = 1337,
+        dual_timer: bool = False,
     ):
         self.reduce_axis = reduce_axis
         self.eps = eps
@@ -129,6 +130,12 @@ class ReferenceRMSNormOracle:
         self.timing_trials = timing_trials
         self.base_seed = base_seed
         self.hidden_seed = hidden_seed
+        # The wall-vs-cpu (perf_counter vs process_time) dual timer is a CPU proxy
+        # for the GPU cuda_event-vs-do_bench stream-bypass check. On CPU, wall >> cpu
+        # is ordinary OS scheduling — NOT a timing bypass — so it false-positives on
+        # honest candidates under contention. OFF by default here; the GPU KernelOracle
+        # keeps the real dual timer where it's meaningful.
+        self.dual_timer = dual_timer
 
     # reference forward (the mechanical truth): RMSNorm over reduce_axis, eps in sqrt, no weight.
     # Accepts an optional eps so it is call-compatible with candidates: fn(x, eps).
@@ -142,7 +149,12 @@ class ReferenceRMSNormOracle:
         return rng.standard_normal(shape, dtype=np.float64).astype(np.float64)
 
     def _time(self, fn: Callable, x: np.ndarray) -> tuple[float, float]:
-        """Return (perf_counter_seconds, process_time_seconds) median over trials."""
+        """Return (perf_counter_seconds, process_time_seconds) as the MIN over trials.
+
+        Min (best) time is the standard micro-benchmark statistic: it reflects the
+        uncontended compute cost, so the measured speedup is stable run-to-run.
+        Median is contaminated by OS scheduling contention, which on CPU can make a
+        genuinely-faster candidate measure marginally slower (a flaky sub-1.0x dip)."""
         for _ in range(self.warmup):
             fn(x.copy(), self.eps)
         wall, cpu = [], []
@@ -151,7 +163,7 @@ class ReferenceRMSNormOracle:
             fn(x.copy(), self.eps)
             wall.append(time.perf_counter() - w0)
             cpu.append(time.process_time() - c0)
-        return float(np.median(wall)), float(np.median(cpu))
+        return float(min(wall)), float(min(cpu))
 
     def verify(self, claim: Claim, candidate: Candidate) -> Verdict:
         seeds = [self.base_seed + i for i in range(self.trials)]
@@ -166,11 +178,12 @@ class ReferenceRMSNormOracle:
             correctness=f"{self.trials} trials (seeds from {self.base_seed}) + hidden shape/seed; "
                         f"np.allclose atol={self.atol} rtol={self.rtol}; candidate on cloned inputs, "
                         f"reference from pristine copy; shape/isnan/isinf asserted.",
-            speed=f"{self.warmup} warmup + {self.timing_trials} timed trials (median); "
+            speed=f"{self.warmup} warmup + {self.timing_trials} timed trials (min, uncontended); "
                   f"speedup = reference_time / candidate_time.",
             anti_tamper=f"input-mutation + input-sensitivity (result-reuse) + materialization "
-                        f"(isnan/isinf) + >{EXCESSIVE_SPEEDUP_THRESHOLD}x excessive-speedup + "
-                        f"dual-timer >{DUAL_TIMER_THRESHOLD}x disagreement (perf_counter vs process_time).",
+                        f"(isnan/isinf) + >{EXCESSIVE_SPEEDUP_THRESHOLD}x excessive-speedup"
+                        + (f" + dual-timer >{DUAL_TIMER_THRESHOLD}x disagreement" if self.dual_timer
+                           else " (wall-vs-cpu dual-timer is GPU-path; off on CPU)") + ".",
         )
 
         def _base_verdict(**kw) -> Verdict:
@@ -275,10 +288,13 @@ class ReferenceRMSNormOracle:
             cand_wall, cand_cpu = self._time(fn, x_speed)
             speedup = (ref_wall / cand_wall) if cand_wall > 0 else float("inf")
 
-            # dual-timer disagreement (only meaningful above the noise floor)
+            # dual-timer disagreement — GPU-only (off by default on CPU; see __init__).
+            # On CPU, wall>>cpu is OS scheduling, not a timing bypass, so enabling it
+            # here false-positives on honest candidates. Computed for evidence only
+            # unless self.dual_timer is explicitly set.
             dual_ratio = None
             dual_disagree = False
-            if cand_wall >= DUAL_TIMER_NOISE_FLOOR_S and cand_cpu >= DUAL_TIMER_NOISE_FLOOR_S:
+            if self.dual_timer and cand_wall >= DUAL_TIMER_NOISE_FLOOR_S and cand_cpu >= DUAL_TIMER_NOISE_FLOOR_S:
                 lo, hi = sorted((cand_wall, cand_cpu))
                 dual_ratio = (hi / lo) if lo > 0 else float("inf")
                 dual_disagree = dual_ratio > DUAL_TIMER_THRESHOLD

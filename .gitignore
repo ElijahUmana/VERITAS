@@ -21,3 +21,4 @@ crucible/.replay_port
 crucible/.hosted_event_ids
 # demo-generated outputs (regenerated every run: certificates + the demo ledger)
 artifacts/
+benchmarks/rmsnorm_lab/generated/
