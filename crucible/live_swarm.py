@@ -204,7 +204,11 @@ def run_megastructure(
     from crucible.ledger import Ledger
     from crucible.orchestrator import Orchestrator
 
-    members_resolved = _resolve_members(list(members or DEFAULT_SWARM), extra, extra_sources)
+    # `members=None` -> the rehearsed default swarm; `members=[]` -> NO rehearsed members (a PURE
+    # generated swarm via extra_sources — the clean #11 "generated survivor rate"). Don't use
+    # `members or DEFAULT_SWARM` (that would inject the default for an empty list too).
+    base = members if members is not None else DEFAULT_SWARM
+    members_resolved = _resolve_members(list(base), extra, extra_sources)
 
     if ledger is None:
         import tempfile

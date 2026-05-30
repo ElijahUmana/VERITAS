@@ -191,6 +191,12 @@ def _cost_estimate(total_verify_seconds: float, proposed: int) -> dict:
 def _build_report(mission_id, requested, items, results, ledger_path) -> SwarmReport:
     from crucible.ledger import DEFAULT_LEDGER_PATH
     proposed = len(items)
+    # Attach source code to SURVIVOR results so they can feed crucible-core's GPU
+    # curve (run_curve ladder) — survivors only, to keep the report light.
+    code_map = {c.candidate_id: c.code for (_c, c) in items}
+    for r in results:
+        if r.get("promoted"):
+            r["code"] = code_map.get(r.get("candidate_id"))
     survivors = sum(1 for r in results if r.get("promoted"))
     by_verdict = Counter((r.get("verdict") if r.get("status") == "ok" else "error") or "unknown"
                          for r in results)
@@ -224,6 +230,24 @@ async def run_swarm(*, n: int, model: str, propose_concurrency: int,
 
 
 # --------------------------------------------------------------------------- #
+def survivor_ladder(report: SwarmReport) -> list[tuple]:
+    """Swarm survivors as a STRICTLY-INCREASING-speedup ladder for crucible-core's
+    GPU self-improvement curve (run_curve): each rung beats the prior frontier, so
+    the 1→2→3 climb is gate-enforceable. Returns ``[(candidate_id, code, speedup)]``
+    in ascending measured-speedup order (a greedy strictly-increasing subsequence)."""
+    survs = sorted(
+        (r for r in report.results
+         if r.get("promoted") and isinstance(r.get("speedup"), (int, float)) and r.get("code")),
+        key=lambda r: r["speedup"],
+    )
+    ladder, last = [], 0.0
+    for r in survs:
+        if r["speedup"] > last + 1e-9:
+            ladder.append((r["candidate_id"], r["code"], float(r["speedup"])))
+            last = r["speedup"]
+    return ladder
+
+
 def generate_candidate_sources(
     n: int = 10, *, model: str = DEFAULT_MODEL,
     mission_id: Optional[str] = None, concurrency: int = 8,

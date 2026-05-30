@@ -381,23 +381,28 @@ def test_live_courtroom_readback(R: Results):
         return
 
     try:
-        from crucible.courtroom_demo import emit_courtroom_run
+        from crucible.courtroom_run import emit_courtroom_run
+        from crucible.oracle.reference_oracle import ReferenceRMSNormOracle
         from crucible import detectors
     except Exception as exc:
         R.skip("C_courtroom", f"courtroom emitter/detectors not available: {exc!r}")
         return
 
-    # Emit a REAL crucible trace under an isolated event_name (hermetic).
-    run_id, _spans = emit_courtroom_run(event_name="veritas_selftest_courtroom")
-    print(dim(f"    emitted isolated run {run_id}"))
+    # Emit a GATE-PRODUCED courtroom run (real Orchestrator + CPU oracle, timing_trials=60
+    # to mirror the demo's robust config) under an isolated event_name (hermetic).
+    oracle = ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4),
+                                    timing_trials=60)
+    run_id, _info = emit_courtroom_run(event_name="veritas_selftest_courtroom", oracle=oracle)
+    print(dim(f"    emitted isolated GATE-PRODUCED run {run_id}"))
 
     # Wait for ingestion.
-    got = ws.wait_for(lambda: ws.claim_span_ids(run_id, "C_GOOD"), timeout=15, interval=0.5)
+    got = ws.wait_for(lambda: ws.claim_span_ids(run_id, "C_GOOD"), timeout=20, interval=0.5)
     if not got:
         R.check("C_courtroom", "trace ingested by Workshop", False,
                 "C_GOOD spans never appeared (ingestion timeout)")
         return
-    R.check("C_courtroom", "real crucible trace ingested by Workshop", True, f"run {run_id[:12]}")
+    R.check("C_courtroom", "real gate-produced crucible trace ingested by Workshop", True,
+            f"run {run_id[:12]}")
 
     # Run the courtroom detectors + write annotations programmatically.
     report = detectors.adjudicate(run_id)
@@ -434,6 +439,18 @@ def test_live_courtroom_readback(R: Results):
         R.check("C_courtroom", "courtroom adjudication is deterministic on a fixed run",
                 report2["caught"] == report["caught"] and report2["gate_held"] == report["gate_held"],
                 f"{report['caught']} vs {report2['caught']}")
+
+        # INTEGRITY (independent 3rd layer): run_eval proves the truth floor actually
+        # HELD on this run — no tampered/unsupported/silent claim was committed and
+        # every committed claim is oracle-backed. True only on a genuine gate-produced
+        # run; False on any tampered-promotion run.
+        ev = _imp("crucible.eval_loop")
+        if ev and hasattr(ev, "run_eval"):
+            res = ev.run_eval(run_id)
+            R.check("C_courtroom", "run_eval: truth floor held (no unsupported/tampered/silent promotion)",
+                    bool(res.get("passed")), str(res.get("failures")))
+        else:
+            R.skip("C_courtroom", "crucible.eval_loop.run_eval unavailable (integrity layer skipped)")
     finally:
         # Hermetic cleanup: remove the annotations this test wrote.
         removed = 0

@@ -63,7 +63,10 @@ def rmsnorm_candidate(x, eps):
 
 def _default_oracle():
     from crucible.oracle.reference_oracle import ReferenceRMSNormOracle
-    return ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4))
+    # timing_trials=60 (vs base 30) for extra stage margin: more trials => the min-time
+    # estimate is more robustly the uncontended compute cost, so the honest candidate's
+    # speedup never dips under contention. (Matches the demo/self-test config.)
+    return ReferenceRMSNormOracle(shape=(256, 1024, 8), hidden_shape=(128, 768, 4), timing_trials=60)
 
 
 def _inject_adversarial(tr: CrucibleTracer, mission_id: str) -> dict:
