@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+logs/
+phase-zero/logs/
+phase-zero/*-VERIFIED.md
+phase-zero/openai_live_results.json
+phase-zero/_fs_probe.txt
+repos/
+research/
+plan/
+*.log
