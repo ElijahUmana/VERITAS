@@ -36,10 +36,17 @@ GPU/Modal/network):
 Run modes:
 
 ```bash
-.venv/bin/python crucible/demo.py            # auto: live overlays where credentials exist, cache fallback
-.venv/bin/python crucible/demo.py --cached   # guaranteed deterministic floor — ZERO network
+.venv/bin/python crucible/demo.py            # FLOOR: deterministic CPU gate, <60s, guaranteed green
+.venv/bin/python crucible/demo.py --cached   # FLOOR + zero-network cold open (no token/Internet)
+.venv/bin/python crucible/demo.py --live     # CEILING: live Modal megastructure — N candidates → N real T4 GPUs at once
 .venv/bin/python crucible/demo.py --no-color
 ```
+
+The default **floor** runs the centerpiece on a deterministic CPU reference oracle
+(gate-produced, keyless, <60s, lands every time). `--live` swaps in the real Modal
+T4 megastructure: candidates fan out across N distinct live GPUs concurrently, a
+reward-hack is caught on real hardware, the honest kernel commits at a real ~2.4×,
+and run #2 compounds — every verdict still produced by the same truth-floor gate.
 
 The demo ends with a **TIMING REPORT** (PASS/FAIL on the <60s target) and a **BEAT
 SCOREBOARD**. Every beat is verified for real against Workshop — the demo prints
