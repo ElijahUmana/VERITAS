@@ -4,10 +4,10 @@
 
 > A swarm of agents propose improvements. An external **mechanical oracle** verifies each one by **executing it** in an isolated Modal sandbox — not by asking another model. Every cheat is caught and quarantined. Only genuinely-verified gains compound into a ledger the next run builds on. **Raindrop is the courtroom** where every verdict is tried, annotated, replayed, and self-healed.
 >
-> The engine is **CRUCIBLE**. Every verdict is mechanically produced and independently verified — we proved it by red-teaming our own verifier through a **12-attack gauntlet** (below) and by catching our own demo cheating three separate times.
+> The engine is **CRUCIBLE**. Every verdict is mechanically produced and independently verified — we proved it by red-teaming our own verifier through a **12-attack gauntlet** (below) and by catching our own pipeline cheating three separate times.
 
 ```bash
-python crucible/demo.py          # the whole thing — <60s, deterministic, guaranteed-green
+python crucible/demo.py          # run the whole system end-to-end, deterministically
 ```
 
 ---
@@ -39,7 +39,7 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
 | **Agent Architectures & Control Loops** | The **verdict is the control signal.** A propose → verify → gate → compound loop where an external oracle, not a reward model, closes the loop. A swarm fans out across live GPUs; a **self-healing eval loop** detects a gate slip and repairs it red→green; the truth-floor gate is a pure, testable control surface red-teamed by a 12-attack gauntlet. |
 | **Retrieval & Knowledge Synthesis** | The **verified ledger is a knowledge base that compounds.** Run N+1 *retrieves* run N's verified frontier as its baseline and skips already-refuted paths. The cold open is live citation retrieval against CourtListener. Synthesis is survivor-only: 30 candidates in, the 8 that pass cross-examination compound. |
 | **Applied Autonomous Research** | Real **verified GPU-kernel research** on live Modal T4s, anchored on **KernelBench** (Stanford–MIT, vendored MIT-licensed). A gate-enforced **self-improvement curve** that *cannot be staged* — provably-real autonomous research, not a leaderboard number an agent can fake. |
-| **Raindrop Workshop track** | Raindrop is **load-bearing on both surfaces** — the local Workshop *is* the courtroom (4 detectors, durable annotations, claim-subtree replay, the self-healing eval loop) and the hosted platform carries events, 6 custom Signals, and a live A/B Experiment. Nothing left on the table. |
+| **Raindrop Workshop track** | Raindrop is **load-bearing on both surfaces** — the local Workshop *is* the courtroom (4 detectors, durable annotations, claim-subtree replay, the self-healing eval loop) and the hosted platform carries the run events and custom Signals that quantify exactly what the gate caught. Nothing left on the table. |
 
 ---
 
@@ -49,8 +49,8 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
                           RAINDROP — the courtroom / nervous system
    ┌──────────────────────────────────────────────────────────────────────────────────┐
    │  WORKSHOP (local :5899)            HOSTED (app.raindrop.ai)                        │
-   │  • crucible.* OTLP span tree       • events + 6 custom Signals                     │
-   │  • 4 truth-floor detectors         • A/B Experiment: strict vs lax oracle          │
+   │  • crucible.* OTLP span tree       • run events                                    │
+   │  • 4 truth-floor detectors         • custom Signals (reward-hack / cheat-blocked)  │
    │  • durable annotations             • Query API read-back                           │
    │  • claim-subtree REPLAY            ▲                                                │
    │  • self-healing eval loop (red→green)                                              │
@@ -79,14 +79,14 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
 - **Oracle layer** (`crucible/oracle/`): pluggable and external. Modal GPU execution, a deterministic CPU reference, a citation database — truth is never an LLM vote.
 - **Anti-tamper** (`oracle/anti_tamper.py`, `modal/verifier_app.py`): input clone/zero, output materialization, dual-timer disagreement, >10× excessive-speedup flag, AST static pre-gate, no-network sandbox, harness-integrity snapshot/restore, per-invocation CUDA reset.
 - **Ledger** (`crucible/ledger.py`): SQLite, `parent_ledger_id` compounding chain, `proof_hash` binding the full provenance of each increment.
-- **Raindrop bridge** (`crucible/trace.py`, `detectors.py`, `replay_server.py`, `eval_loop.py`, `hosted.py`): the courtroom — emit, detect, annotate, replay, self-heal, and the hosted Signals/Experiments.
+- **Raindrop bridge** (`crucible/trace.py`, `detectors.py`, `replay_server.py`, `eval_loop.py`, `hosted.py`): the courtroom — emit, detect, annotate, replay, self-heal, and the hosted Signals.
 
 ---
 
-## See it — the `<60s` demo
+## Run it yourself
 
 ```bash
-python crucible/demo.py            # deterministic CPU gate, <60s, guaranteed-green, keyless, offline
+python crucible/demo.py            # deterministic CPU gate, keyless, offline
 python crucible/demo.py --live     # the real Modal T4 megastructure (N candidates → N live GPUs) + live citation lookup
 python crucible/demo.py --cached   # zero-network everything
 ```
@@ -99,11 +99,11 @@ python crucible/demo.py --cached   # zero-network everything
 | **It improves itself** | **Run #2** reads run #1's verified row, skips the refuted path, and commits a further certified gain. | Verified memory that compounds; the curve can't be staged. |
 | **Raindrop close** | A **replay** re-verifies the increment; a deliberately-broken run is **self-healed red→green**; Workshop URLs + `proof_hash` + certificate printed. | Raindrop is the courtroom — inspectable, annotated, replayable, self-healing. |
 
-Prints `DEMO GREEN` only if all five beats land **and** are confirmed by Workshop read-back, within budget. Verified **10/10** across repeated runs; the cold open runs on **real captured CourtListener bytes**.
+Prints `DEMO GREEN` only if all five beats land **and** are confirmed by Workshop read-back. It's deterministic — the same inputs produce the same verdicts every run, and the cold open runs on **real captured CourtListener bytes**.
 
 ---
 
-## Verified results
+## The results
 
 - **An AI that provably improves itself** — gate-enforced monotonic so it *cannot be staged*:
   ```
@@ -113,8 +113,8 @@ Prints `DEMO GREEN` only if all five beats land **and** are confirmed by Worksho
   `run4` was a real, correct, faster kernel — rejected anyway because it didn't beat `2.98×`. That single blocked run is the proof the curve only climbs on certified gains.
 - **The swarm caught cheating its own benchmark** — 4 cheat classes (stream-bypass, result-reuse, zero-inputs, torch-disguise) caught on real GPU *and* CPU, each by its named defense; the honest kernel commits at a real **2.41×** on a live T4.
 - **The megastructure** — N gpt-5.4-mini candidates fan out across N concurrent T4s; a 30-candidate swarm yields **8 survivors (27%)**, the rest blocked on merit; only survivors compound.
-- **Raindrop, both surfaces** — local courtroom with 4 detectors + claim-subtree replay + a self-healing eval loop (red→green on screen); hosted platform with 6 Signals and a real A/B proving anti-tamper is load-bearing: **cheats shipped lax-oracle = 5, strict-oracle = 0**, read back via the Query API.
-- **Adversarial self-test 41/41** (44/44 with `--modal`) — the discipline that keeps the demo honest passes only if every attack is caught.
+- **Raindrop, both surfaces** — local courtroom with 4 detectors + claim-subtree replay + a self-healing eval loop (red→green on screen); hosted platform with custom Signals that quantify what the gate caught — reward-hacks flagged and cheats blocked before they could ship, read back via the Query API.
+- **Adversarial self-test 41/41** (44/44 with `--modal`) — the discipline that keeps the pipeline honest passes only if every attack is caught.
 
 ---
 
@@ -128,28 +128,28 @@ We red-teamed our own verifier. A cheat that fools your verifier is worse than n
 | Reward-hack kernel ("2× faster", secretly cheating) | anti-tamper oracle rejects; Workshop issue annotation on the rejected claim | ✅ verified |
 | Honest increment must *actually* commit | oracle pass → ledger commit → `proof_hash` + certificate; Workshop confirms promoted span has an oracle span and **no** issue annotation | ✅ verified |
 | Cross-run memory forgery | run #2 reads run #1's committed row and links via `parent_ledger_id` | ✅ verified |
-| Replay theatre | demo starts a real replay server; the replay POST returns `confirmed` and emits a replay trace id | ✅ verified |
+| Replay theatre | a real replay server; the replay POST returns `confirmed` and emits a replay trace id | ✅ verified |
 | Mismatched identity injection | candidate-bound truth floor blocks wrong claim/mission/candidate IDs | ✅ verified |
 | **Raindrop read-back spoof** | missing / empty / malformed read-back **fails closed** — candidate-specific read-back required to promote | ✅ verified |
 | **`np.allclose` monkeypatch** | candidate cannot patch correctness checks; an external monkeypatch also cannot make wrong output pass | ✅ verified |
 | Poisoned ledger rows | invalid committed/replayed rows cannot become baselines | ✅ verified |
 | Provenance tampering | changing trace / run / ledger / claim / candidate / mission / artifact changes the `proof_hash` | ✅ verified |
 | Packaging / reproducibility | editable install works; `numpy` declared; cold-open cache shipped in the wheel | ✅ verified |
-| Artifact leakage | demo certificates isolated to `artifacts/certificates`; build artifacts gitignored | ✅ verified |
+| Artifact leakage | certificates isolated to `artifacts/certificates`; build artifacts gitignored | ✅ verified |
 
 This is the differentiator. Anyone can build an agent that optimizes a number. **We built the verifier that survives an adversary trying to fake that number** — and proved it fails closed under every attack we could devise.
 
 ---
 
-## Run everything
+## Everything you can run
 
 ```bash
-python crucible/demo.py                  # the <60s demo (real gate, deterministic). --live = real GPU + live citation lookup
+python crucible/demo.py                  # the whole system (real gate, deterministic). --live = real GPU + live citation lookup
 python -m crucible.self_improvement      # the gate-enforced self-improvement curve
 python crucible/swarm.py --n 20          # verified swarm fan-out — only survivors commit
-python -m crucible.hosted --verify       # hosted Raindrop read-back: Signals + the strict-vs-lax A/B
+python -m crucible.hosted --verify       # hosted Raindrop read-back: the Signals
 python -m crucible.eval_loop             # the self-healing eval loop (red→green)
-python tests/adversarial_selftest.py     # "try to break our own demo" — 41/41 (44/44 with --modal)
+python tests/adversarial_selftest.py     # the adversarial gauntlet — 41/41 (44/44 with --modal)
 ```
 
 ---
@@ -165,7 +165,7 @@ python tests/adversarial_selftest.py     # "try to break our own demo" — 41/41
 
 ## Stack & layout
 
-**Modal** (elastic isolated T4 verifier + megastructure fan-out) · **OpenAI** (gpt-5.5 / gpt-5.4-mini generator swarm + Agents SDK) · **Raindrop** (Workshop courtroom + hosted Signals/Experiments) · **KernelBench** (MIT, vendored).
+**Modal** (elastic isolated T4 verifier + megastructure fan-out) · **OpenAI** (gpt-5.5 / gpt-5.4-mini generator swarm + Agents SDK) · **Raindrop** (Workshop courtroom + hosted Signals) · **KernelBench** (MIT, vendored).
 
 ```
 crucible/   orchestrator.py (the gate) · schemas.py · oracle/ (kernel/reference/citation + anti-tamper + static)
