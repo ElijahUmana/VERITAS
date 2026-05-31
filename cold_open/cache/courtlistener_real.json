@@ -1,6 +1,6 @@
 {
   "_cache_meta": {
-    "is_fixture": true,
+    "is_fixture": false,
     "citation": "347 U.S. 483",
     "expected_status": 200,
     "expected_verdict": "confirmed",
@@ -8,33 +8,119 @@
     "description": "Hard-cached CourtListener v4 citation-lookup response for a REAL, famous SCOTUS case (Brown v. Board of Education). The cold open flashes GREEN: the cited case exists.",
     "case_facts_source": "Case identity (cluster_id 105221, citations, date_filed 1954-05-17, citation_count 3812, absolute_url) captured live from the PUBLIC CourtListener v4 SEARCH API (no auth required) on 2026-05-30.",
     "envelope_note": "The citation-lookup v4 envelope (status / normalized_citations / start_index / end_index / error_message) is constructed to match the documented v4 citation-lookup schema. That endpoint now REQUIRES 'Authorization: Token <token>' (401 unauthenticated, as of 2026-05-07); the EDU token is being registered. The citation_oracle live overlay self-refreshes this file with the real captured bytes the first time an authenticated call succeeds.",
-    "schema_ref": "https://www.courtlistener.com/help/api/rest/v4/citation-lookup/"
+    "schema_ref": "https://www.courtlistener.com/help/api/rest/v4/citation-lookup/",
+    "source": "live",
+    "last_live_refresh": "captured from authenticated CourtListener v4 citation-lookup"
   },
   "response": [
     {
       "citation": "347 U.S. 483",
-      "normalized_citations": ["347 U.S. 483"],
+      "normalized_citations": [
+        "347 U.S. 483"
+      ],
       "start_index": 0,
       "end_index": 12,
       "status": 200,
       "error_message": "",
       "clusters": [
         {
+          "resource_uri": "https://www.courtlistener.com/api/rest/v4/clusters/105221/",
           "id": 105221,
           "absolute_url": "/opinion/105221/brown-v-board-of-education/",
-          "case_name": "Brown v. Board of Education",
-          "case_name_short": "Brown",
-          "case_name_full": "Brown v. Board of Education of Topeka",
-          "date_filed": "1954-05-17",
-          "precedential_status": "Published",
-          "citation_count": 3812,
-          "court": "Supreme Court of the United States",
-          "court_id": "scotus",
+          "panel": [],
+          "non_participating_judges": [],
+          "docket_id": 84657,
+          "docket": "https://www.courtlistener.com/api/rest/v4/dockets/84657/",
+          "sub_opinions": [
+            "https://www.courtlistener.com/api/rest/v4/opinions/105221/"
+          ],
           "citations": [
-            {"volume": 347, "reporter": "U.S.", "page": "483", "type": 1},
-            {"volume": 74, "reporter": "S. Ct.", "page": "686", "type": 1},
-            {"volume": 98, "reporter": "L. Ed.", "page": "873", "type": 1}
-          ]
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "347",
+              "reporter": "U.S.",
+              "page": "483",
+              "type": 1
+            },
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "74",
+              "reporter": "S. Ct.",
+              "page": "686",
+              "type": 1
+            },
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "1954",
+              "reporter": "U.S. LEXIS",
+              "page": "2094",
+              "type": 6
+            },
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "38",
+              "reporter": "A.L.R. 2d",
+              "page": "1180",
+              "type": 4
+            },
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "53",
+              "reporter": "Ohio Op.",
+              "page": "326",
+              "type": 2
+            },
+            {
+              "date_created": "2025-09-25T21:50:34.120042-07:00",
+              "date_modified": "2025-09-25T21:50:34.139566-07:00",
+              "volume": "98",
+              "reporter": "L. Ed.",
+              "page": "873",
+              "type": 1
+            }
+          ],
+          "cluster_redirections": [],
+          "date_created": "2016-01-04T16:29:20.765617-08:00",
+          "date_modified": "2026-03-01T09:41:26.889051-08:00",
+          "judges": "Warren",
+          "date_filed": "1954-05-17",
+          "date_filed_is_approximate": false,
+          "slug": "brown-v-board-of-education",
+          "case_name_short": "Brown",
+          "case_name": "Brown v. Board of Education",
+          "case_name_full": "BROWN Et Al. v. BOARD OF EDUCATION OF TOPEKA Et Al.",
+          "scdb_id": "1953-069",
+          "scdb_decision_direction": 2,
+          "scdb_votes_majority": 9,
+          "scdb_votes_minority": 0,
+          "source": "LRU",
+          "procedural_history": "",
+          "attorneys": "Robert L. Carter argued the cause for appellants in No. 1 on the original argument and on the reargument. Thurgood Marshall argued the cause for appellants in No. 2 on the original argument and Spottswood W. Robinson, III, for appellants in No. 4 on the original argument, and both argued the causes for appellants in Nos. 2 and 4 on the reargument. Louis L. Redding and Jack Green-berg argued the cause for respondents in No. 10 on the original argument and Jack Greenberg and Thurgood Marshall on the reargument., On the briefs were Robert L. Carter, Thurgood Marshall, Spottswood W. Robinson, III, Louis L. Redding, Jack Greenberg, George E. C. Hayes, William R. Ming, Jr., Constance Baker Motley, James M. Nabrit, Jr., Charles S. Scott, Frank D. Reeves, Harold R. Boulware and Oliver W. Hill for appellants in Nos. 1, 2 and 4 and respondents in No. 10; George M. Johnson for appellants in Nos. 1, 2 and 4; and Loren Miller for appellants in Nos. 2 and 4. Arthur D. Shores and A. T. Walden were on the Statement as to Jurisdiction and a brief opposing a Motion to Dismiss or Affirm in No. 2., Paul E. Wilson, Assistant Attorney General of Kansas, argued the cause for appellees in No. 1 on the original argument and on the reargument. With him on the briefs was Harold R. Fatzer, Attorney General., John W. Davis argued the cause for appellees in No. 2 on the original argument and for appellees in Nos. 2 and 4 on the reargument. With him on the briefs in No. 2 were T. C. Callison, Attorney General of South Carolina, Robert McC. Figg, Jr., S. E. Rogers, William R. Meagher and Taggart Whipple., J. Lindsay Almond, Jr., Attorney General of Virginia, and T. Justin Moore argued the cause for appellees in No. 4 on the original argument and for appellees in Nos. 2 and 4 on the reargument. On the briefs in No. 4 were J. Lindsay Almond, Jr., Attorney General, and Henry T. Wickham, Special Assistant Attorney General, for the State of Virginia, and T. Justin Moore, Archibald O. Robertson, John W. Riely and T. Justin Moore, Jr. for the Prince Edward County School Authorities, appellees., H. Albert Young, Attorney General of Delaware, argued the cause for petitioners in No. 10 on the original argument and on the reargument. With him on the briefs was Louis J. Finger, Special Deputy Attorney General., By special leave of Court, Assistant Attorney General Rankin argued the cause for the United States on the reargument, as amicus curiae, urging reversal in Nos. 1, 2 and 4 and affirmance in No. 10. With him on the brief were Attorney General Brownell, Philip Elman, Leon Ulman, William J. Lamont and M. Magdelena Schoch. James P. McGranery, then Attorney General, and Philip Elman filed a brief for the United States on the original argument, as amicus curiae, urging reversal in Nos. 1, 2 and 4 and affirmance in No. 10., Briefs of amici curiae supporting appellants in No. 1 were filed by Shad Polier, Will Maslow and Joseph B. Robison for the American Jewish Congress; by Edwin J. Lukas, Arnold Forster, Arthur Garfield Hays, Frank E. Karelsen, Leonard Haas, Saburo Kido and Theodore Leskes for the American Civil Liberties Union et al.; and by John Ligtenberg and Selma M. Borchardt for the American Federation of Teachers. Briefs of amici curiae supporting appellants in No. 1 and respondents in No. 10 were filed by Arthur J. Goldberg and Thomas E. Harris for the Congress of Industrial Organizations and by Phineas Indritz for the American Veterans Committee, Inc.",
+          "nature_of_suit": "",
+          "posture": "",
+          "syllabus": "",
+          "headnotes": "",
+          "summary": "",
+          "disposition": "",
+          "history": "",
+          "other_dates": "Argued December 9, 1952., Reargued December 8, 1953.",
+          "cross_reference": "",
+          "correction": "",
+          "citation_count": 3812,
+          "precedential_status": "Published",
+          "date_blocked": null,
+          "blocked": false,
+          "filepath_json_harvard": "law.free.cap.us.347/483.11301409.json",
+          "filepath_pdf_harvard": "harvard_pdf/105221.pdf",
+          "filepath_xml_scan": null,
+          "filepath_pdf_scan": null,
+          "arguments": "",
+          "headmatter": "<parties id=\"b557-3\">\r\n    BROWN et al.\r\n    <em>\r\n     v.\r\n    </em>\r\n    BOARD OF EDUCATION OF TOPEKA et al.\r\n   </parties><br><docketnumber id=\"b557-4\">\r\n    NO. 1.\r\n   </docketnumber><br><otherdate id=\"b557-5\">\r\n    Argued December 9, 1952.\r\n   </otherdate><otherdate id=\"AJ_\">\r\n    Reargued December 8, 1953.\r\n   </otherdate><decisiondate id=\"At49\">\r\n    Decided May 17, 1954.\r\n   </decisiondate><br><attorneys id=\"b558-8\">\r\n<span citation-index=\"1\" class=\"star-pagination\" label=\"484\"> \r\n     *484\r\n     </span>\r\n<em>\r\n     Robert L. Carter\r\n    </em>\r\n    argued the cause for appellants in No. 1 on the original argument and on the reargument.\r\n    <em>\r\n     Thurgood Marshall\r\n    </em>\r\n    argued the cause for appellants in No. 2 on the original argument and\r\n    <em>\r\n     Spottswood W. Robinson, III,\r\n    </em>\r\n    for appellants in No. 4 on the original argument, and both argued the causes for appellants in Nos. 2 and 4 on the reargument.\r\n    <em>\r\n     Louis L. Redding\r\n    </em>\r\n    and\r\n    <em>\r\n     Jack Green-berg\r\n    </em>\r\n    argued the cause for respondents in No. 10 on the original argument and\r\n    <em>\r\n     Jack Greenberg\r\n    </em>\r\n    and\r\n    <em>\r\n     Thurgood Marshall\r\n    </em>\r\n    on the reargument.\r\n   </attorneys><br><attorneys id=\"b558-9\">\r\n    On the briefs were\r\n    <em>\r\n     Robert L. Carter, Thurgood Marshall, Spottswood W. Robinson, III, Louis L. Redding, Jack Greenberg, George E. C. Hayes, William R. Ming, Jr., Constance Baker Motley, James M. Nabrit, Jr., Charles S. Scott, Frank D. Reeves, Harold R. Boulware\r\n    </em>\r\n    and\r\n    <em>\r\n     Oliver W. Hill\r\n    </em>\r\n    for appellants in Nos. 1, 2 and 4 and respondents in No. 10;\r\n    <em>\r\n     George M. Johnson\r\n    </em>\r\n    for appellants in Nos. 1, 2 and 4; and\r\n    <em>\r\n     Loren Miller\r\n    </em>\r\n    for appellants in Nos. 2 and 4.\r\n    <em>\r\n     Arthur D. Shores\r\n    </em>\r\n    and\r\n    <em>\r\n     A. T. Walden\r\n    </em>\r\n    were on the Statement as to Jurisdiction and a brief opposing a Motion to Dismiss or Affirm in No. 2.\r\n   </attorneys><br><attorneys id=\"b558-10\">\r\n<em>\r\n     Paul E. Wilson,\r\n    </em>\r\n    Assistant Attorney General of Kansas, argued the cause for appellees in No. 1 on the original argument and on the reargument. With him on the briefs was\r\n    <em>\r\n     Harold R. Fatzer,\r\n    </em>\r\n    Attorney General.\r\n   </attorneys><br><attorneys id=\"b558-11\">\r\n<em>\r\n     John W. Davis\r\n    </em>\r\n    argued the cause for appellees in No. 2 on the original argument and for appellees in Nos. 2 and 4 on the reargument. With him on the briefs in No. 2 were\r\n    <em>\r\n     T. C. Callison,\r\n    </em>\r\n    Attorney General of South Carolina,\r\n    <em>\r\n     Robert McC. Figg, Jr., S. E. Rogers, William R. Meagher\r\n    </em>\r\n    and\r\n    <em>\r\n     Taggart Whipple.\r\n    </em>\r\n</attorneys><br><attorneys id=\"b559-3\">\r\n<span citation-index=\"1\" class=\"star-pagination\" label=\"485\"> \r\n     *485\r\n     </span>\r\n<em>\r\n     J. Lindsay Almond, Jr.,\r\n    </em>\r\n    Attorney General of Virginia, and\r\n    <em>\r\n     T. Justin Moore\r\n    </em>\r\n    argued the cause for appellees in No. 4 on the original argument and for appellees in Nos. 2 and 4 on the reargument. On the briefs in No. 4 were\r\n    <em>\r\n     J. Lindsay Almond, Jr.,\r\n    </em>\r\n    Attorney General, and\r\n    <em>\r\n     Henry T. Wickham,\r\n    </em>\r\n    Special Assistant Attorney General, for the State of Virginia, and\r\n    <em>\r\n     T. Justin Moore, Archibald O. Robertson, John W. Riely\r\n    </em>\r\n    and\r\n    <em>\r\n     T. Justin Moore, Jr.\r\n    </em>\r\n    for the Prince Edward County School Authorities, appellees.\r\n   </attorneys><br><attorneys id=\"b559-4\">\r\n<em>\r\n     H. Albert Young,\r\n    </em>\r\n    Attorney General of Delaware, argued the cause for petitioners in No. 10 on the original argument and on the reargument. With him on the briefs was\r\n    <em>\r\n     Louis J. Finger,\r\n    </em>\r\n    Special Deputy Attorney General.\r\n   </attorneys><br><attorneys id=\"b559-5\">\r\n    By special leave of Court,\r\n    <em>\r\n     Assistant Attorney General Rankin\r\n    </em>\r\n    argued the cause for the United States on the reargument, as\r\n    <em>\r\n     amicus curiae,\r\n    </em>\r\n    urging reversal in Nos. 1, 2 and 4 and affirmance in No. 10. With him on the brief were\r\n    <em>\r\n     Attorney General Brownell, Philip Elman, Leon Ulman, William J. Lamont\r\n    </em>\r\n    and\r\n    <em>\r\n     M. Magdelena Schoch. James P. McGranery,\r\n    </em>\r\n    then Attorney General, and\r\n    <em>\r\n     Philip Elman\r\n    </em>\r\n    filed a brief for the United States on the original argument, as\r\n    <em>\r\n     amicus curiae,\r\n    </em>\r\n    urging reversal in Nos. 1, 2 and 4 and affirmance in No. 10.\r\n   </attorneys><br><attorneys id=\"b559-6\">\r\n    Briefs of\r\n    <em>\r\n     amici curiae\r\n    </em>\r\n    supporting appellants in No. 1 were filed by\r\n    <em>\r\n     Shad Polier, Will Maslow\r\n    </em>\r\n    and\r\n    <em>\r\n     Joseph B. Robison\r\n    </em>\r\n    for the American Jewish Congress; by\r\n    <em>\r\n     Edwin J. Lukas, Arnold Forster, Arthur Garfield Hays, Frank E. Karelsen, Leonard Haas, Saburo Kido\r\n    </em>\r\n    and\r\n    <em>\r\n     Theodore Leskes\r\n    </em>\r\n    for the American Civil Liberties Union et al.; and by\r\n    <em>\r\n     John Ligtenberg\r\n    </em>\r\n    and\r\n    <em>\r\n     Selma M. Borchardt\r\n    </em>\r\n    for the American Federation of Teachers. Briefs of\r\n    <em>\r\n     amici curiae\r\n    </em>\r\n    supporting appellants in No. 1 and respondents in No. 10 were filed by\r\n    <em>\r\n     Arthur J. Goldberg\r\n    </em>\r\n    and\r\n    <em>\r\n     Thomas E. Harris\r\n    </em>\r\n<span citation-index=\"1\" class=\"star-pagination\" label=\"486\"> \r\n     *486\r\n     </span>\r\n    for the Congress of Industrial Organizations and by\r\n    <em>\r\n     Phineas Indritz\r\n    </em>\r\n    for the American Veterans Committee, Inc.\r\n   </attorneys>"
         }
       ]
     }

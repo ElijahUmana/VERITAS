@@ -150,7 +150,10 @@ def beat_cold_open(tl: Timeline, mode: str) -> bool:
         legal = _imp("cold_open.legal_demo")
         cit = _imp("crucible.oracle.citation_oracle")
         if legal and cit and hasattr(legal, "run_cold_open"):
-            prefer_live = (mode in ("live", "auto")) and bool(os.environ.get("COURTLISTENER_TOKEN"))
+            # FLOOR stays offline-deterministic: auto/cached read the (real, self-healed)
+            # cached bytes — no network on stage, <60s guaranteed. Only --live makes the
+            # live authenticated CourtListener call (relaxed budget; it self-heals the cache).
+            prefer_live = (mode == "live") and bool(os.environ.get("COURTLISTENER_TOKEN"))
             oracle = cit.CitationOracle(prefer_live=prefer_live, verbose=False)
             col = legal.C(enabled=sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
             ok, _results = legal.run_cold_open(oracle, col, with_spans=True)
