@@ -26,10 +26,20 @@ from __future__ import annotations
 
 import pathlib
 
+import os
+
 import modal
 
 APP_NAME = "veritas-verifier"
 GPU = "T4"  # cheapest real GPU; the demo substrate. Override at deploy via env if desired.
+
+# Concurrency ceiling — keep the live demo UNDER the workspace GPU limit (Starter = 10 concurrent
+# GPUs). Default 6 leaves headroom so this app alone never trips the cap (excess calls queue, never
+# error). Bump with one var if the workspace gets a Team/Enterprise raise: VERITAS_MAX_GPU=20.
+MAX_GPU = int(os.environ.get("VERITAS_MAX_GPU", "6"))
+# Release warm containers quickly when idle so a fresh --live run starts with the GPU budget free
+# (no queueing behind containers left warm by a prior run/test).
+SCALEDOWN_WINDOW = int(os.environ.get("VERITAS_SCALEDOWN_S", "60"))
 
 _HERE = pathlib.Path(__file__).resolve().parent          # VERITAS/modal
 _ROOT = _HERE.parent                                       # VERITAS
@@ -164,7 +174,8 @@ def _hidden_trials(ref_model, cand_model, tol, device, dtype, features, anti_tam
 # ---------------------------------------------------------------------------
 # The deployed verifier function.
 # ---------------------------------------------------------------------------
-@app.function(image=image, gpu=GPU, timeout=900, retries=0, block_network=True)
+@app.function(image=image, gpu=GPU, timeout=900, retries=0, block_network=True,
+              max_containers=MAX_GPU, scaledown_window=SCALEDOWN_WINDOW)
 def verify_candidate(payload: dict) -> dict:
     """Run ONE candidate through the hardened oracle. Returns a JSON-only verdict dict.
 

@@ -20,6 +20,7 @@ demo.py --live and narrates it.
 """
 from __future__ import annotations
 
+import os
 import time
 from collections import namedtuple
 from dataclasses import dataclass, field
@@ -36,6 +37,11 @@ from crucible.oracle.kernel_oracle import (
 from crucible.schemas import Candidate, Claim
 
 TARGET = "36_RMSNorm"
+
+# Cap concurrent T4s under the workspace GPU limit (Starter = 10). Default 6 leaves headroom; the
+# fan-out runs in batches of <= MAX_GPU so a swarm bigger than the cap degrades gracefully (slower,
+# never queues/errors). Bump with one var if the cap lifts: VERITAS_MAX_GPU=20.
+MAX_GPU = int(os.environ.get("VERITAS_MAX_GPU", "6"))
 
 # Default swarm: a cheat + the honest increment + two more cheats. All pass the static gate and
 # reach Modal (so they spin real sandboxes); their judges are runtime. Callers append generated
@@ -76,6 +82,8 @@ class MegastructureResult:
     parallelism: int                  # distinct live T4 containers used at once (megastructure width)
     committed: list[str]              # committed ledger_ids
     blocked: list[str]                # blocked labels
+    max_gpu: int = MAX_GPU            # concurrency cap honored (workspace GPU limit headroom)
+    n_batches: int = 1                # fan-out batches (1 = whole swarm ran at once; >1 = capped/degraded)
     compounding: Optional[dict] = None  # {baseline_ledger_id, parent_ledger_id, promoted, run_id}
     trace_id: Optional[str] = None
     run_url: Optional[str] = None
@@ -152,13 +160,16 @@ def _blocked_dict(m: _Member, static: dict) -> dict:
     }
 
 
-def fan_out(members: list[_Member], spec: Optional[dict] = None) -> tuple[dict[str, dict], dict]:
-    """Static-pre-gate, then CONCURRENTLY verify the survivors on Modal via .map() (proven in
-    phase-zero to scale out across distinct containers). Returns
-    ({candidate_id: live_verdict_dict}, telemetry). Disguise/bypass cheats are pre-gated
-    client-side and never spin a sandbox (they die before GPU spend)."""
+def fan_out(members: list[_Member], spec: Optional[dict] = None,
+            max_gpu: Optional[int] = None) -> tuple[dict[str, dict], dict]:
+    """Static-pre-gate, then verify the survivors on Modal via .map(). Concurrency is CAPPED at
+    `max_gpu` (default VERITAS_MAX_GPU=6) to stay under the workspace GPU limit: up to max_gpu run
+    at once; any excess runs in the next batch (graceful degradation — slower, never queues/errors
+    against the cap). Returns ({candidate_id: live_verdict_dict}, telemetry). Disguise/bypass
+    cheats are pre-gated client-side and never spin a sandbox (they die before GPU spend)."""
     import modal
 
+    max_gpu = max(1, max_gpu or MAX_GPU)
     verdicts: dict[str, dict] = {}
     modal_batch: list[_Member] = []
     for m in members:
@@ -170,15 +181,20 @@ def fan_out(members: list[_Member], spec: Optional[dict] = None) -> tuple[dict[s
 
     payloads = [_payload(m, spec) for m in modal_batch]
     fanout_wall = 0.0
+    n_batches = 0
     if payloads:
         fn = modal.Function.from_name(APP_NAME, FUNCTION_NAME)
         t0 = time.monotonic()
-        results = list(fn.map(payloads))          # concurrent fan-out across containers
+        results: list = []
+        for i in range(0, len(payloads), max_gpu):
+            results.extend(list(fn.map(payloads[i:i + max_gpu])))  # <= max_gpu concurrent T4s/batch
+            n_batches += 1
         fanout_wall = round(time.monotonic() - t0, 2)
         for m, vdict in zip(modal_batch, results):
             verdicts[m.cid] = vdict
 
-    return verdicts, {"fanout_wall_s": fanout_wall, "n_modal": len(payloads)}
+    return verdicts, {"fanout_wall_s": fanout_wall, "n_modal": len(payloads),
+                      "max_gpu": max_gpu, "n_batches": n_batches}
 
 
 def run_megastructure(
@@ -191,6 +207,7 @@ def run_megastructure(
     ledger: Any = None,
     mission_id: str = "msn_megastructure",
     out_dir: str = "certificates",
+    max_gpu: Optional[int] = None,
 ) -> MegastructureResult:
     """Run the live megastructure beat.
 
@@ -214,8 +231,8 @@ def run_megastructure(
         import tempfile
         ledger = Ledger(f"{tempfile.mkdtemp(prefix='veritas_mega_')}/ledger.db")
 
-    # 1) CONCURRENT FAN-OUT on Modal (the megastructure).
-    verdicts, tele = fan_out(members_resolved, spec)
+    # 1) CONCURRENT FAN-OUT on Modal (the megastructure), capped at max_gpu.
+    verdicts, tele = fan_out(members_resolved, spec, max_gpu=max_gpu)
 
     # 2) Drive the live verdicts through the REAL gate (spans + truth-floor + ledger).
     orch = Orchestrator(oracle=FannedOracle(verdicts), ledger=ledger, mission_id=mission_id, out_dir=out_dir)
@@ -260,6 +277,8 @@ def run_megastructure(
         sandbox_ids=distinct,
         fanout_wall_s=tele["fanout_wall_s"],
         parallelism=len(distinct),
+        max_gpu=tele.get("max_gpu", MAX_GPU),
+        n_batches=tele.get("n_batches", 1),
         committed=[m.ledger_id for m in members_out if m.promoted and m.ledger_id],
         blocked=[m.label for m in members_out if not m.promoted],
         trace_id=orch.trace_id,
@@ -272,7 +291,7 @@ def run_megastructure(
         baseline = ledger.latest_baseline(TARGET)
         if baseline is not None:
             m2 = _Member(_cid("good_rehearsed"), "good_rehearsed", candidate_source("good_rehearsed"), "confirmed")
-            v2, _ = fan_out([m2], spec)
+            v2, _ = fan_out([m2], spec, max_gpu=max_gpu)
             orch2 = Orchestrator(oracle=FannedOracle(v2), ledger=ledger, mission_id=mission_id, out_dir=out_dir)
             claim2 = Claim(mission_id=mission_id, statement="a further-improved RMSNorm (run#2)",
                            claim_type="speedup_claim", target=TARGET,
