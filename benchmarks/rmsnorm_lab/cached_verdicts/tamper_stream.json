@@ -4,13 +4,17 @@
   "candidate_id": "tamper_stream",
   "oracle_type": "kernel",
   "correctness_passed": true,
-  "speedup": 3894.940108387576,
+  "speedup": 14.87441417752068,
   "tamper_detected": true,
   "verifier_status": "OK",
-  "blocked_reason": "dual-timer disagreement 11.41x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 355.71x / do_bench 3894.94x > 10x)",
+  "blocked_reason": "dual-timer disagreement 2.36x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 35.94x / do_bench 14.87x > 10x)",
   "hardware": "Tesla T4",
   "measured_by": "modal-oracle",
   "details": {
+    "sandbox": {
+      "modal_task_id": "ta-01KSXNFVVA16WNS2Z6TSXECFZ4",
+      "node": "modal"
+    },
     "static": {
       "ok": true,
       "blocked_reason": null,
@@ -87,17 +91,17 @@
       }
     },
     "speed": {
-      "cand_cuda_event_ms": 0.016752640152699314,
-      "ref_cuda_event_ms": 5.959132800102234,
-      "cand_do_bench_ms": 0.001468571434088517,
-      "ref_do_bench_ms": 5.719997780663626,
-      "speedup_cuda_event": 355.71305452663546,
-      "speedup_do_bench": 3894.940108387576,
+      "cand_cuda_event_ms": 0.1633497605769662,
+      "ref_cuda_event_ms": 5.871163215637207,
+      "cand_do_bench_ms": 0.38480928714477247,
+      "ref_do_bench_ms": 5.7238127163478305,
+      "speedup_cuda_event": 35.94228234494942,
+      "speedup_do_bench": 14.87441417752068,
       "num_warmup": 5,
       "num_perf_trials": 100
     },
     "anti_tamper": {
-      "dual_timer_ratio": 11.407439749838932,
+      "dual_timer_ratio": 2.3557382991293716,
       "dual_timer_threshold": 1.5,
       "dual_timer_disagree": true,
       "excessive_speedup": true,

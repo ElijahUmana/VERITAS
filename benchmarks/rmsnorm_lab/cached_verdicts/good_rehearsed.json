@@ -4,13 +4,17 @@
   "candidate_id": "good_rehearsed",
   "oracle_type": "kernel",
   "correctness_passed": true,
-  "speedup": 2.4135592687801886,
+  "speedup": 2.4109057244275514,
   "tamper_detected": false,
   "verifier_status": "OK",
   "blocked_reason": null,
   "hardware": "Tesla T4",
   "measured_by": "modal-oracle",
   "details": {
+    "sandbox": {
+      "modal_task_id": "ta-01KSXNBV2KYRBHPGJ7WYZRBH43",
+      "node": "modal"
+    },
     "static": {
       "ok": true,
       "blocked_reason": null,
@@ -85,17 +89,17 @@
       }
     },
     "speed": {
-      "cand_cuda_event_ms": 2.4058118319511412,
-      "ref_cuda_event_ms": 5.730230722427368,
-      "cand_do_bench_ms": 2.3696834359850203,
-      "ref_do_bench_ms": 5.71937142099653,
-      "speedup_cuda_event": 2.381828306904653,
-      "speedup_do_bench": 2.4135592687801886,
+      "cand_cuda_event_ms": 2.4817068791389465,
+      "ref_cuda_event_ms": 5.730466566085815,
+      "cand_do_bench_ms": 2.3676754292987643,
+      "ref_do_bench_ms": 5.708242246082851,
+      "speedup_cuda_event": 2.3090827584255473,
+      "speedup_do_bench": 2.4109057244275514,
       "num_warmup": 5,
       "num_perf_trials": 100
     },
     "anti_tamper": {
-      "dual_timer_ratio": 1.015246085370514,
+      "dual_timer_ratio": 1.0481617743838965,
       "dual_timer_threshold": 1.5,
       "dual_timer_disagree": false,
       "excessive_speedup": false,

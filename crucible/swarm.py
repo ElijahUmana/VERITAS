@@ -225,11 +225,13 @@ def run_swarm(*, n: int, model: str, propose_concurrency: int,
 # --------------------------------------------------------------------------- #
 # Handoff helpers for the megastructure chain (#9 curve / #10 live demo)
 # --------------------------------------------------------------------------- #
-def survivor_ladder(report: SwarmReport) -> list[tuple]:
-    """Swarm survivors as a STRICTLY-INCREASING-speedup ladder for crucible-core's
-    GPU self-improvement curve (run_curve): each rung beats the prior frontier, so
-    the 1→2→3 climb is gate-enforceable. Returns ``[(candidate_id, code, speedup)]``
-    in ascending measured-speedup order (a greedy strictly-increasing subsequence)."""
+def survivor_ladder(report: SwarmReport, *, margin: float = 0.05) -> list[tuple]:
+    """Swarm survivors as a climbing-speedup ladder for crucible-core's GPU
+    self-improvement curve (run_curve): each rung beats the prior by ``margin``
+    (default 0.05, matching run_curve's ``improvement_margin``), so every rung is
+    guaranteed-committable on re-verify and the 1→2→3 climb is gate-enforceable.
+    Returns ``[(candidate_id, code, speedup)]`` (greedy increasing subsequence,
+    each ≥ (1+margin)× the prior kept rung — ties / too-close / blocked dropped)."""
     survs = sorted(
         (r for r in report.results
          if r.get("promoted") and isinstance(r.get("speedup"), (int, float)) and r.get("code")),
@@ -237,7 +239,7 @@ def survivor_ladder(report: SwarmReport) -> list[tuple]:
     )
     ladder, last = [], 0.0
     for r in survs:
-        if r["speedup"] > last + 1e-9:
+        if r["speedup"] > last * (1.0 + margin) + 1e-9:
             ladder.append((r["candidate_id"], r["code"], float(r["speedup"])))
             last = r["speedup"]
     return ladder

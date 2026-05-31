@@ -3,7 +3,7 @@
     "verdict": "confirmed",
     "correctness_passed": true,
     "tamper_detected": false,
-    "speedup": 2.4135592687801886,
+    "speedup": 2.4109057244275514,
     "blocked_reason": null,
     "file": "good_rehearsed.json"
   },
@@ -27,8 +27,8 @@
     "verdict": "refuted",
     "correctness_passed": true,
     "tamper_detected": true,
-    "speedup": 3894.940108387576,
-    "blocked_reason": "dual-timer disagreement 11.41x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 355.71x / do_bench 3894.94x > 10x)",
+    "speedup": 14.87441417752068,
+    "blocked_reason": "dual-timer disagreement 2.36x > 1.5x (work hidden on non-default stream); excessive speedup (cuda_event 35.94x / do_bench 14.87x > 10x)",
     "file": "tamper_stream.json"
   },
   "tamper_torch_disguise": {

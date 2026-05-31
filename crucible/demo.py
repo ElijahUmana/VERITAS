@@ -371,6 +371,25 @@ def beat_close(tl: Timeline, ws: WorkshopClient, run_id: str, run2_id: str | Non
             else "rejected-flagged readback FAILED.")
         ok = ok_g and ok_h
 
+        # SELF-HEALING (FLOOR §5: "inspectable, replayable, self-healing"): the
+        # courtroom catches its OWN gate regressing (a buggy gate ships a reward-hack
+        # → eval RED) and heals it (strict re-verification → fixed gate blocks it →
+        # eval GREEN). Narrated bonus — the 5 core beats above already determine green.
+        ev = _imp("crucible.eval_loop")
+        if ev and hasattr(ev, "self_heal"):
+            try:
+                h = ev.self_heal()
+                if not h["eval_before"]["passed"]:
+                    verdict_red(f"SELF-HEAL: a buggy gate shipped a reward-hack → eval RED "
+                                f"(run {h['broken_run'][:8]})")
+                if h["eval_after"]["passed"]:
+                    verdict_green(f"strict re-verification healed it → eval GREEN "
+                                  f"(run {h['healed_run'][:8]})")
+                say(dim(f"      broken {ws.origin}/runs/{h['broken_run'][:12]}…  "
+                        f"healed {ws.origin}/runs/{h['healed_run'][:12]}…"))
+            except Exception as exc:
+                say(ylw(f"  self-heal note: {exc}"))
+
         base = ws.origin
         say("")
         say(bold("  THE COURTROOM (open in Workshop):"))

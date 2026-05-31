@@ -71,6 +71,12 @@ class ModelNew(nn.Module):
         # default-stream cuda_event timer measures ~0. Correct after a global sync; fraudulent
         # under any single-stream timer.
         side = torch.cuda.Stream()
+        # Make the side stream wait for the input to be ready on the default stream — otherwise
+        # the kernel can read `x` before its clone finishes (a read-before-write race that
+        # intermittently yields NaN). This makes the output DETERMINISTICALLY correct so the cheat
+        # is reliably caught by the DUAL TIMER (its named defense), not by accidental NaN. The
+        # timing fraud is unaffected: the default-stream timer still never sees the side-stream work.
+        side.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(side):
             out = self._rmsnorm(x)
         return out

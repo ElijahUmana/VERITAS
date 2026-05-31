@@ -11,6 +11,10 @@
   "hardware": "Tesla T4",
   "measured_by": "modal-oracle",
   "details": {
+    "sandbox": {
+      "modal_task_id": "ta-01KSXNFVVA16WNS2Z6TSXECFZ4",
+      "node": "modal"
+    },
     "static": {
       "ok": true,
       "blocked_reason": null,
@@ -67,21 +71,21 @@
       },
       "hidden_extra_shape": {
         "passed": false,
-        "materialized": true,
+        "materialized": false,
         "mutated": false,
         "patched": [],
         "candidate_error": false,
-        "max_abs_err": 2.1503548622131348,
-        "reason": "allclose failed: max_abs_err=2.15035 > tol=0.01"
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
       },
       "hidden_rand_mix": {
         "passed": false,
-        "materialized": true,
+        "materialized": false,
         "mutated": false,
         "patched": [],
         "candidate_error": false,
-        "max_abs_err": 2985.705322265625,
-        "reason": "allclose failed: max_abs_err=2985.71 > tol=0.01"
+        "reason": "output not materialized: output contains NaN (non-materialized / reused uninitialized buffer)",
+        "max_abs_err": null
       }
     }
   },

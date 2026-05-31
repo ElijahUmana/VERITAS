@@ -11,6 +11,10 @@
   "hardware": "Tesla T4",
   "measured_by": "modal-oracle",
   "details": {
+    "sandbox": {
+      "modal_task_id": "ta-01KSXNFVVA16WNS2Z6TSXECFZ4",
+      "node": "modal"
+    },
     "static": {
       "ok": true,
       "blocked_reason": null,
