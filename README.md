@@ -7,7 +7,7 @@
 > The engine is **CRUCIBLE**. Every verdict is mechanically produced and independently verified — we proved it by red-teaming our own verifier through a **12-attack gauntlet** (below) and by catching our own pipeline cheating three separate times.
 
 ```bash
-python crucible/demo.py          # run the whole system end-to-end, deterministically
+python crucible/demo.py          # run the whole system end-to-end
 ```
 
 ---
@@ -61,7 +61,7 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
    GENERATOR (OpenAI)   ──propose──▶   CRUCIBLE ORCHESTRATOR   ──verify──▶   ORACLE (external, mechanical)
    gpt-5.5 / gpt-5.4-mini swarm         the truth-floor gate:                 ├─ Modal T4 sandbox — runs the code
    N candidates, diverse seeds          1. correctness (5 seeds)              │   block_network · CUDA reset · KernelBench
-                                        2. anti-tamper clean                  ├─ CPU reference — deterministic, stage-safe
+                                        2. anti-tamper clean                  ├─ CPU reference — stage-safe
                                         3. oracle verdict = confirmed         └─ CourtListener — citation existence
                                         4. speedup ≥ threshold
                                         5. Raindrop read-back confirms span
@@ -76,7 +76,7 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
 
 **Components**
 - **Truth-floor gate** (`crucible/orchestrator.py`, `schemas.evaluate_truth_floor`): a *pure function* of the verdict. Five invariants must all hold or the claim is blocked. Pure ⇒ unit-testable ⇒ red-teamable.
-- **Oracle layer** (`crucible/oracle/`): pluggable and external. Modal GPU execution, a deterministic CPU reference, a citation database — truth is never an LLM vote.
+- **Oracle layer** (`crucible/oracle/`): pluggable and external. Modal GPU execution, a CPU reference, a citation database — truth is never an LLM vote.
 - **Anti-tamper** (`oracle/anti_tamper.py`, `modal/verifier_app.py`): input clone/zero, output materialization, dual-timer disagreement, >10× excessive-speedup flag, AST static pre-gate, no-network sandbox, harness-integrity snapshot/restore, per-invocation CUDA reset.
 - **Ledger** (`crucible/ledger.py`): SQLite, `parent_ledger_id` compounding chain, `proof_hash` binding the full provenance of each increment.
 - **Raindrop bridge** (`crucible/trace.py`, `detectors.py`, `replay_server.py`, `eval_loop.py`, `hosted.py`): the courtroom — emit, detect, annotate, replay, self-heal, and the hosted Signals.
@@ -86,7 +86,7 @@ The thesis in one line: **Oracle-Grounded Falsification.** Generation is cheap; 
 ## Run it yourself
 
 ```bash
-python crucible/demo.py            # deterministic CPU gate, keyless, offline
+python crucible/demo.py            # the CPU gate — keyless, offline
 python crucible/demo.py --live     # the real Modal T4 megastructure (N candidates → N live GPUs) + live citation lookup
 python crucible/demo.py --cached   # zero-network everything
 ```
@@ -99,7 +99,7 @@ python crucible/demo.py --cached   # zero-network everything
 | **It improves itself** | **Run #2** reads run #1's verified row, skips the refuted path, and commits a further certified gain. | Verified memory that compounds; the curve can't be staged. |
 | **Raindrop close** | A **replay** re-verifies the increment; a deliberately-broken run is **self-healed red→green**; Workshop URLs + `proof_hash` + certificate printed. | Raindrop is the courtroom — inspectable, annotated, replayable, self-healing. |
 
-Prints `DEMO GREEN` only if all five beats land **and** are confirmed by Workshop read-back. It's deterministic — the same inputs produce the same verdicts every run, and the cold open runs on **real captured CourtListener bytes**.
+Prints `DEMO GREEN` only if all five beats land **and** are confirmed by Workshop read-back. The same inputs produce the same verdicts every run, and the cold open runs on **real captured CourtListener bytes**.
 
 ---
 
@@ -144,7 +144,7 @@ This is the differentiator. Anyone can build an agent that optimizes a number. *
 ## Everything you can run
 
 ```bash
-python crucible/demo.py                  # the whole system (real gate, deterministic). --live = real GPU + live citation lookup
+python crucible/demo.py                  # the whole system (real gate). --live = real GPU + live citation lookup
 python -m crucible.self_improvement      # the gate-enforced self-improvement curve
 python crucible/swarm.py --n 20          # verified swarm fan-out — only survivors commit
 python -m crucible.hosted --verify       # hosted Raindrop read-back: the Signals
@@ -154,10 +154,10 @@ python tests/adversarial_selftest.py     # the adversarial gauntlet — 41/41 (4
 
 ---
 
-## Why it wins
+## How it compares
 
-- **vs Modal autoresearch:** *"They gave a swarm elastic GPUs to chase a number. We built the courtroom that catches the swarm faking that number — and compounds only what survives cross-examination."*
-- **vs AlphaEvolve:** *"It trusts a single machine-gradable oracle — but the oracle is exactly what frontier agents learn to hack. We make the oracle adversarial, pluggable, and measured, with a verified ledger that compounds across runs and a 12-attack gauntlet proving it fails closed."*
+- **Modal autoresearch** gives a swarm elastic GPUs to chase a number. VERITAS adds the courtroom that catches the swarm faking that number — and compounds only what survives cross-examination.
+- **AlphaEvolve** trusts a single machine-gradable oracle — but that oracle is exactly what frontier agents learn to hack. VERITAS makes the oracle adversarial, pluggable, and measured, with a verified ledger that compounds across runs and a 12-attack gauntlet proving it fails closed.
 
 > ### *"Everyone else builds agents that optimize. We built the courtroom that decides whether the optimization is **real** — and only real, verified increments compound. The AI improves itself, and cannot lie about it."*
 
